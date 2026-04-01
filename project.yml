@@ -1,0 +1,53 @@
+name: LimitBar
+options:
+  bundleIdPrefix: me.atlasbar
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  xcodeVersion: "16"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  LimitBar:
+    type: application
+    platform: macOS
+    sources:
+      - LimitBar
+    info:
+      path: LimitBar/Info.plist
+      properties:
+        CFBundleName: LimitBar
+        CFBundleDisplayName: LimitBar
+        CFBundleIdentifier: me.atlasbar.LimitBar
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "0.1.0"
+        LSUIElement: YES
+        NSPrincipalClass: NSApplication
+        NSAccessibilityUsageDescription: "LimitBar needs Accessibility access to read usage data from Codex."
+        NSUserNotificationUsageDescription: "LimitBar sends notifications when your Codex cooldown ends."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.atlasbar.LimitBar
+        PRODUCT_NAME: LimitBar
+    entitlements:
+      path: LimitBar/LimitBar.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+
+  LimitBarTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - LimitBarTests
+    dependencies:
+      - target: LimitBar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.atlasbar.LimitBarTests
+        GENERATE_INFOPLIST_FILE: YES
