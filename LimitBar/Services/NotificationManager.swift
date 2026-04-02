@@ -7,10 +7,10 @@ protocol UserNotificationCentering: AnyObject, Sendable {
     func removePendingNotificationRequests(withIdentifiers identifiers: [String])
 }
 
-protocol NotificationScheduling: AnyObject {
+protocol NotificationScheduling: RenewalNotificationScheduling, AnyObject {
     func requestAuthorization() async -> Bool
     func scheduleCooldownReadyNotification(accountName: String, at date: Date)
-    func cancelNotification(for accountName: String)
+    func cancelCooldownReadyNotification(accountName: String)
 }
 
 private actor NotificationAuthorizationCoordinator {
@@ -46,29 +46,9 @@ private actor NotificationAuthorizationCoordinator {
             return granted
         }
     }
-
-    func scheduleCooldownReadyNotification(accountName: String, at date: Date) async {
-        guard await requestAuthorization() else { return }
-        let timeInterval = date.timeIntervalSinceNow
-        guard timeInterval > 0 else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Account available again"
-        content.body = "\(accountName) should be ready to use."
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(
-            timeInterval: timeInterval,
-            repeats: false
-        )
-
-        let identifier = "cooldown-\(accountName.replacingOccurrences(of: " ", with: "-"))"
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
-        try? await center.add(request)
-    }
 }
 
-final class NotificationManager {
+final class NotificationManager: NotificationScheduling {
     private let center: any UserNotificationCentering
     private let authorizationCoordinator: NotificationAuthorizationCoordinator
 
@@ -82,21 +62,65 @@ final class NotificationManager {
     }
 
     func scheduleCooldownReadyNotification(accountName: String, at date: Date) {
-        Task { [authorizationCoordinator, accountName, date] in
-            await authorizationCoordinator.scheduleCooldownReadyNotification(
-                accountName: accountName,
-                at: date
+        let identifier = cooldownIdentifier(for: accountName)
+        scheduleNotification(
+            identifier: identifier,
+            title: "Account available again",
+            body: "\(accountName) should be ready to use.",
+            at: date
+        )
+    }
+
+    func cancelCooldownReadyNotification(accountName: String) {
+        center.removePendingNotificationRequests(withIdentifiers: [cooldownIdentifier(for: accountName)])
+    }
+
+    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {
+        scheduleNotification(
+            identifier: identifier,
+            title: "Subscription renewal reminder",
+            body: "\(accountName) expires soon.",
+            at: date
+        )
+    }
+
+    func cancelNotifications(withIdentifiers identifiers: [String]) {
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+
+    private func scheduleNotification(
+        identifier: String,
+        title: String,
+        body: String,
+        at date: Date
+    ) {
+        Task { [authorizationCoordinator, center] in
+            guard await authorizationCoordinator.requestAuthorization() else {
+                return
+            }
+
+            let timeInterval = date.timeIntervalSinceNow
+            guard timeInterval > 0 else { return }
+
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: timeInterval,
+                repeats: false
             )
+
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            try? await center.add(request)
         }
     }
 
-    func cancelNotification(for accountName: String) {
-        let identifier = "cooldown-\(accountName.replacingOccurrences(of: " ", with: "-"))"
-        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+    private func cooldownIdentifier(for accountName: String) -> String {
+        "cooldown-\(accountName.replacingOccurrences(of: " ", with: "-"))"
     }
 }
-
-extension NotificationManager: NotificationScheduling {}
 
 extension UNUserNotificationCenter: @unchecked Sendable {}
 extension UNUserNotificationCenter: UserNotificationCentering {}

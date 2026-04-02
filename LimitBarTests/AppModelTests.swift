@@ -78,6 +78,7 @@ private final class InMemorySnapshotStore: SnapshotStoring {
 
 private final class RecordingNotificationManager: NotificationScheduling {
     private(set) var scheduled: [(String, Date)] = []
+    private(set) var cancelled: [String] = []
 
     func requestAuthorization() async -> Bool {
         true
@@ -87,7 +88,13 @@ private final class RecordingNotificationManager: NotificationScheduling {
         scheduled.append((accountName, date))
     }
 
-    func cancelNotification(for accountName: String) {}
+    func cancelCooldownReadyNotification(accountName: String) {
+        cancelled.append(accountName)
+    }
+
+    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {}
+
+    func cancelNotifications(withIdentifiers identifiers: [String]) {}
 }
 
 private final class WriteTracker: @unchecked Sendable {
@@ -124,6 +131,47 @@ private func makeAuthJSONData(accessToken: String, refreshToken: String) throws 
     )
 }
 
+private func makeAppModelTempStore() throws -> SnapshotStore {
+    let tmp = FileManager.default.temporaryDirectory
+        .appendingPathComponent("LimitBarAppModelTests-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+    return try SnapshotStore(directory: tmp)
+}
+
+private final class NotificationManagerSpy: NotificationScheduling {
+    var cooldownScheduled: [(accountName: String, date: Date)] = []
+    var cooldownCancelled: [String] = []
+    var renewalScheduled: [RenewalReminderRequest] = []
+    var cancelledIdentifiers: [String] = []
+
+    func requestAuthorization() async -> Bool {
+        true
+    }
+
+    func scheduleCooldownReadyNotification(accountName: String, at date: Date) {
+        cooldownScheduled.append((accountName, date))
+    }
+
+    func cancelCooldownReadyNotification(accountName: String) {
+        cooldownCancelled.append(accountName)
+    }
+
+    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {
+        renewalScheduled.append(
+            RenewalReminderRequest(
+                identifier: identifier,
+                fireDate: date,
+                title: "Subscription renewal reminder",
+                body: "\(accountName) expires soon."
+            )
+        )
+    }
+
+    func cancelNotifications(withIdentifiers identifiers: [String]) {
+        cancelledIdentifiers.append(contentsOf: identifiers)
+    }
+}
+
 @MainActor
 struct AppModelTests {
     @Test
@@ -142,7 +190,6 @@ struct AppModelTests {
             nextResetAt: nil,
             subscriptionExpiresAt: nil,
             usageStatus: .available,
-            subscriptionStatus: .unknown,
             sourceConfidence: 1.0,
             lastSyncedAt: Date(),
             rawExtractedStrings: []
@@ -163,7 +210,6 @@ struct AppModelTests {
             nextResetAt: nil,
             subscriptionExpiresAt: nil,
             usageStatus: .stale,
-            subscriptionStatus: .unknown,
             sourceConfidence: 1.0,
             lastSyncedAt: Date(),
             rawExtractedStrings: []
@@ -178,6 +224,8 @@ struct AppModelTests {
         model.resetAllData()
         #expect(model.accounts.isEmpty)
         #expect(model.snapshots.isEmpty)
+        #expect(model.accountMetadata.isEmpty)
+        #expect(model.settings == .default)
         #expect(model.compactLabel == "--")
     }
 
@@ -190,9 +238,7 @@ struct AppModelTests {
             id: UUID(),
             provider: "Codex",
             email: "delete-me@example.com",
-            label: nil,
-            note: nil,
-            priority: nil
+            label: nil
         )
         let snapshot = UsageSnapshot(
             id: UUID(),
@@ -202,27 +248,29 @@ struct AppModelTests {
             nextResetAt: nil,
             subscriptionExpiresAt: nil,
             usageStatus: .available,
-            subscriptionStatus: .unknown,
             sourceConfidence: 1.0,
             lastSyncedAt: Date(),
             rawExtractedStrings: []
         )
+        let metadata = AccountMetadata(accountId: account.id, priority: .primary, note: "Keep me")
 
         model.accounts = [account]
         model.snapshots = [snapshot]
+        model.accountMetadata = [metadata]
         model.deleteAccount(account)
 
         #expect(model.accounts.isEmpty)
         #expect(model.snapshots.isEmpty)
+        #expect(model.accountMetadata.isEmpty)
         #expect(model.compactLabel == "--")
     }
 
     @Test
     func deduplicatedRemovesDuplicateUnknownAccounts() {
         // Simulate loading a state with duplicate unknown accounts
-        let a1 = Account(id: UUID(), provider: "Codex", email: nil, label: nil, note: nil, priority: nil)
-        let a2 = Account(id: UUID(), provider: "Codex", email: nil, label: nil, note: nil, priority: nil)
-        let a3 = Account(id: UUID(), provider: "Codex", email: "x@x.com", label: nil, note: nil, priority: nil)
+        let a1 = Account(id: UUID(), provider: "Codex", email: nil, label: nil)
+        let a2 = Account(id: UUID(), provider: "Codex", email: nil, label: nil)
+        let a3 = Account(id: UUID(), provider: "Codex", email: "x@x.com", label: nil)
 
         // Use the parser to verify deduplication logic directly
         var seen = Set<String>()
@@ -238,40 +286,198 @@ struct AppModelTests {
     }
 
     @Test
-    func pollingCoordinatorReadsFromUserDefaults() {
-        UserDefaults.standard.set(30.0, forKey: "pollingWhenRunning")
-        UserDefaults.standard.set(120.0, forKey: "pollingWhenClosed")
-
+    func pollingCoordinatorReadsFromSettingsState() {
         let coordinator = PollingCoordinator()
-        #expect(coordinator.interval(codexRunning: true) == 30)
-        #expect(coordinator.interval(codexRunning: false) == 120)
-
-        // Cleanup
-        UserDefaults.standard.removeObject(forKey: "pollingWhenRunning")
-        UserDefaults.standard.removeObject(forKey: "pollingWhenClosed")
+        let settings = AppSettingsState(
+            pollingWhenRunning: 30,
+            pollingWhenClosed: 120,
+            cooldownNotificationsEnabled: true,
+            renewalReminders: .default
+        )
+        #expect(coordinator.interval(codexRunning: true, settings: settings) == 30)
+        #expect(coordinator.interval(codexRunning: false, settings: settings) == 120)
     }
 
     @Test
     func pollingCoordinatorClampsOutOfRangeValues() {
-        UserDefaults.standard.set(1.0, forKey: "pollingWhenRunning")   // below min 5
-        UserDefaults.standard.set(999.0, forKey: "pollingWhenClosed")  // above max 300
-
         let coordinator = PollingCoordinator()
-        #expect(coordinator.interval(codexRunning: true) == 5)
-        #expect(coordinator.interval(codexRunning: false) == 300)
-
-        UserDefaults.standard.removeObject(forKey: "pollingWhenRunning")
-        UserDefaults.standard.removeObject(forKey: "pollingWhenClosed")
+        let settings = AppSettingsState(
+            pollingWhenRunning: 1,
+            pollingWhenClosed: 999,
+            cooldownNotificationsEnabled: true,
+            renewalReminders: .default
+        )
+        #expect(coordinator.interval(codexRunning: true, settings: settings) == 5)
+        #expect(coordinator.interval(codexRunning: false, settings: settings) == 300)
     }
 
     @Test
     func pollingCoordinatorUsesDefaultsWhenNotSet() {
-        UserDefaults.standard.removeObject(forKey: "pollingWhenRunning")
-        UserDefaults.standard.removeObject(forKey: "pollingWhenClosed")
-
         let coordinator = PollingCoordinator()
-        #expect(coordinator.interval(codexRunning: true) == 15)
-        #expect(coordinator.interval(codexRunning: false) == 60)
+        #expect(coordinator.interval(codexRunning: true, settings: .default) == 15)
+        #expect(coordinator.interval(codexRunning: false, settings: .default) == 60)
+    }
+
+    @Test
+    func sortedAccountsUsesPriorityThenRecencyThenName() {
+        let model = AppModel(shouldStartPolling: false)
+        model.resetAllData()
+
+        let primary = Account(id: UUID(), provider: "Codex", email: "b@example.com", label: nil)
+        let backup = Account(id: UUID(), provider: "Codex", email: "a@example.com", label: nil)
+        let plain = Account(id: UUID(), provider: "Codex", email: "c@example.com", label: nil)
+
+        model.accounts = [plain, backup, primary]
+        model.accountMetadata = [
+            AccountMetadata(accountId: backup.id, priority: .backup),
+            AccountMetadata(accountId: primary.id, priority: .primary)
+        ]
+        model.snapshots = [
+            UsageSnapshot(
+                id: UUID(),
+                accountId: plain.id,
+                sessionPercentUsed: nil,
+                weeklyPercentUsed: nil,
+                nextResetAt: nil,
+                subscriptionExpiresAt: nil,
+                usageStatus: .unknown,
+                sourceConfidence: 0,
+                lastSyncedAt: Date(timeIntervalSince1970: 10),
+                rawExtractedStrings: []
+            ),
+            UsageSnapshot(
+                id: UUID(),
+                accountId: backup.id,
+                sessionPercentUsed: nil,
+                weeklyPercentUsed: nil,
+                nextResetAt: nil,
+                subscriptionExpiresAt: nil,
+                usageStatus: .unknown,
+                sourceConfidence: 0,
+                lastSyncedAt: Date(timeIntervalSince1970: 20),
+                rawExtractedStrings: []
+            ),
+            UsageSnapshot(
+                id: UUID(),
+                accountId: primary.id,
+                sessionPercentUsed: nil,
+                weeklyPercentUsed: nil,
+                nextResetAt: nil,
+                subscriptionExpiresAt: nil,
+                usageStatus: .unknown,
+                sourceConfidence: 0,
+                lastSyncedAt: Date(timeIntervalSince1970: 30),
+                rawExtractedStrings: []
+            )
+        ]
+
+        #expect(model.sortedAccounts.map(\.id) == [primary.id, backup.id, plain.id])
+    }
+
+    @Test
+    func updateMetadataPersistsPriorityAndNoteInMemory() {
+        let model = AppModel(shouldStartPolling: false)
+        model.resetAllData()
+
+        let account = Account(id: UUID(), provider: "Codex", email: "meta@example.com", label: nil)
+        model.accounts = [account]
+
+        model.updatePriority(.primary, for: account.id)
+        model.updateNote("Warm spare account", for: account.id)
+
+        let metadata = model.metadata(for: account.id)
+        #expect(metadata.priority == .primary)
+        #expect(metadata.note == "Warm spare account")
+    }
+
+    @Test
+    func initReconcilesCooldownAndRenewalNotificationsFromPersistedState() throws {
+        let store = try makeAppModelTempStore()
+        let notificationManager = NotificationManagerSpy()
+        let account = Account(id: UUID(), provider: "Codex", email: "persisted@example.com", label: nil)
+        let now = Date()
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: nil,
+            weeklyPercentUsed: nil,
+            nextResetAt: now.addingTimeInterval(60 * 60),
+            subscriptionExpiresAt: now.addingTimeInterval(10 * 24 * 60 * 60),
+            usageStatus: .available,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        try store.save(
+            PersistedState(
+                accounts: [account],
+                snapshots: [snapshot],
+                accountMetadata: [],
+                settings: .default
+            )
+        )
+
+        _ = AppModel(
+            notificationManager: notificationManager,
+            store: store,
+            shouldStartPolling: false
+        )
+
+        #expect(notificationManager.cooldownScheduled.count == 1)
+        #expect(notificationManager.cooldownScheduled.first?.accountName == account.displayName)
+        #expect(Set(notificationManager.cancelledIdentifiers).count == 4)
+        #expect(notificationManager.renewalScheduled.count == 4)
+    }
+
+    @Test
+    func deleteAccountCancelsCooldownAndRenewalNotifications() {
+        let notificationManager = NotificationManagerSpy()
+        let model = AppModel(notificationManager: notificationManager, shouldStartPolling: false)
+        model.resetAllData()
+        notificationManager.cooldownCancelled.removeAll()
+        notificationManager.cancelledIdentifiers.removeAll()
+
+        let account = Account(
+            id: UUID(),
+            provider: "Codex",
+            email: "delete-notify@example.com",
+            label: nil
+        )
+        model.accounts = [account]
+
+        model.deleteAccount(account)
+
+        #expect(notificationManager.cooldownCancelled == [account.displayName])
+        #expect(
+            Set(notificationManager.cancelledIdentifiers) ==
+            Set(RenewalReminderScheduler().reminderIdentifiers(for: account.id))
+        )
+    }
+
+    @Test
+    func resetAllDataCancelsNotificationsForLoadedAccounts() {
+        let notificationManager = NotificationManagerSpy()
+        let model = AppModel(notificationManager: notificationManager, shouldStartPolling: false)
+        model.resetAllData()
+        notificationManager.cooldownCancelled.removeAll()
+        notificationManager.cancelledIdentifiers.removeAll()
+
+        let account = Account(
+            id: UUID(),
+            provider: "Codex",
+            email: "reset-notify@example.com",
+            label: nil
+        )
+        model.accounts = [account]
+
+        model.resetAllData()
+
+        #expect(notificationManager.cooldownCancelled == [account.displayName])
+        #expect(
+            Set(notificationManager.cancelledIdentifiers) ==
+            Set(RenewalReminderScheduler().reminderIdentifiers(for: account.id))
+        )
     }
 
     @Test
@@ -534,9 +740,7 @@ struct AppModelTests {
             id: UUID(),
             provider: "Codex",
             email: "user@example.com",
-            label: nil,
-            note: nil,
-            priority: nil
+            label: nil
         )
         let snapshot = UsageSnapshot(
             id: UUID(),
@@ -546,12 +750,18 @@ struct AppModelTests {
             nextResetAt: nil,
             subscriptionExpiresAt: nil,
             usageStatus: .available,
-            subscriptionStatus: .unknown,
             sourceConfidence: 1.0,
             lastSyncedAt: Date().addingTimeInterval(-300),
             rawExtractedStrings: []
         )
-        try store.save(PersistedState(accounts: [account], snapshots: [snapshot]))
+        try store.save(
+            PersistedState(
+                accounts: [account],
+                snapshots: [snapshot],
+                accountMetadata: [],
+                settings: .default
+            )
+        )
 
         let model = AppModel(
             usageProvider: FakeCurrentUsageProvider(result: nil),
@@ -614,9 +824,7 @@ struct AppModelTests {
             id: UUID(),
             provider: "Codex",
             email: "delete@example.com",
-            label: nil,
-            note: nil,
-            priority: nil
+            label: nil
         )
         let snapshot = UsageSnapshot(
             id: UUID(),
@@ -626,12 +834,16 @@ struct AppModelTests {
             nextResetAt: nil,
             subscriptionExpiresAt: nil,
             usageStatus: .available,
-            subscriptionStatus: .unknown,
             sourceConfidence: 1.0,
             lastSyncedAt: Date(),
             rawExtractedStrings: []
         )
-        let state = PersistedState(accounts: [account], snapshots: [snapshot])
+        let state = PersistedState(
+            accounts: [account],
+            snapshots: [snapshot],
+            accountMetadata: [],
+            settings: .default
+        )
 
         let result = try coordinator.deleteAccount(account, from: state)
 
@@ -651,9 +863,7 @@ struct AppModelTests {
                         id: UUID(),
                         provider: "Codex",
                         email: "persisted@example.com",
-                        label: nil,
-                        note: nil,
-                        priority: nil
+                        label: nil
                     )
                 ],
                 snapshots: []

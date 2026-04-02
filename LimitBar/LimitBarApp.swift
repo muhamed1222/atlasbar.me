@@ -26,5 +26,10 @@ struct LimitBarApp: App {
                 .environmentObject(appModel)
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsRootView()
+                .environmentObject(appModel)
+        }
     }
 }

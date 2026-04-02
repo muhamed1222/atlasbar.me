@@ -12,7 +12,7 @@ struct MenuBarRootView: View {
             Divider()
             actionsSection
         }
-        .frame(width: 292)
+        .frame(width: 312)
         .confirmationDialog(
             "Delete this account from LimitBar?",
             isPresented: Binding(
@@ -76,15 +76,17 @@ struct MenuBarRootView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(appModel.accounts) { account in
+                        ForEach(appModel.sortedAccounts) { account in
                             let snapshot = appModel.snapshots.last { $0.accountId == account.id }
+                            let metadata = appModel.metadata(for: account.id)
                             AccountRowView(
                                 account: account,
                                 snapshot: snapshot,
+                                metadata: metadata,
                                 onDelete: { accountPendingDeletion = account }
                             )
                                 .padding(.horizontal, 10)
-                            if account.id != appModel.accounts.last?.id {
+                            if account.id != appModel.sortedAccounts.last?.id {
                                 Divider().padding(.horizontal, 10)
                             }
                         }
@@ -122,6 +124,16 @@ struct MenuBarRootView: View {
             menuActionButton("Open Codex", systemImage: "terminal") {
                 appModel.openCodex()
             }
+
+            SettingsLink {
+                Label("Settings…", systemImage: "gearshape")
+                    .font(.system(size: 13))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderless)
 
             Divider()
 

@@ -4,6 +4,13 @@ func remainingPercent(from usedPercent: Double) -> Double {
     min(max(100 - usedPercent, 0), 100)
 }
 
+func expiryDateLabel(_ date: Date, now: Date = .now) -> String {
+    if Calendar.current.isDate(date, inSameDayAs: now) {
+        return "Expires today"
+    }
+    return "Expires \(date.formatted(.dateTime.month(.abbreviated).day()))"
+}
+
 func countdownString(until date: Date, now: Date = .now) -> String {
     let remaining = max(0, Int(date.timeIntervalSince(now)))
     if remaining == 0 { return "Ready" }

@@ -3,6 +3,43 @@ import Foundation
 struct PersistedState: Codable, Equatable {
     var accounts: [Account]
     var snapshots: [UsageSnapshot]
+    var accountMetadata: [AccountMetadata]
+    var settings: AppSettingsState
+
+    init(
+        accounts: [Account],
+        snapshots: [UsageSnapshot],
+        accountMetadata: [AccountMetadata] = [],
+        settings: AppSettingsState = .default
+    ) {
+        self.accounts = accounts
+        self.snapshots = snapshots
+        self.accountMetadata = accountMetadata
+        self.settings = settings
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case accounts
+        case snapshots
+        case accountMetadata
+        case settings
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        accounts = try container.decodeIfPresent([Account].self, forKey: .accounts) ?? []
+        snapshots = try container.decodeIfPresent([UsageSnapshot].self, forKey: .snapshots) ?? []
+        accountMetadata = try container.decodeIfPresent([AccountMetadata].self, forKey: .accountMetadata) ?? []
+        settings = try container.decodeIfPresent(AppSettingsState.self, forKey: .settings) ?? .default
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(accounts, forKey: .accounts)
+        try container.encode(snapshots, forKey: .snapshots)
+        try container.encode(accountMetadata, forKey: .accountMetadata)
+        try container.encode(settings, forKey: .settings)
+    }
 }
 
 protocol SnapshotStoring: AnyObject {

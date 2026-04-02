@@ -3,83 +3,139 @@ import SwiftUI
 struct AccountRowView: View {
     let account: Account
     let snapshot: UsageSnapshot?
+    let metadata: AccountMetadata
     let onDelete: () -> Void
+
+    private var presentation: AccountRowPresentation {
+        makeAccountRowPresentation(account: account, snapshot: snapshot, metadata: metadata)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(alignment: .top, spacing: 8) {
                 statusDot
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(account.displayName)
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .lineLimit(1)
+                    .padding(.top, 4)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    topLine
                     metaLine
-                }
-                Spacer()
-                if let snapshot {
-                    Text(shortUsageLabel(snapshot: snapshot))
-                        .font(.system(size: 11).monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 18, height: 18)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-                .help("Delete account")
-            }
 
-            if let snapshot {
-                if snapshot.sessionPercentUsed != nil || snapshot.weeklyPercentUsed != nil {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let session = snapshot.sessionPercentUsed {
-                            usageBar(label: "S", usedPercent: session)
-                        }
-                        if let weekly = snapshot.weeklyPercentUsed {
-                            usageBar(label: "W", usedPercent: weekly)
-                        }
+                    if let snapshot, snapshot.sessionPercentUsed != nil || snapshot.weeklyPercentUsed != nil {
+                        usageSection(snapshot)
                     }
-                }
 
-                if let freshness = freshnessLabel(for: snapshot) {
-                    Text(freshness)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    if metadata.hasNote {
+                        notePreview
+                    }
+
+                    footerLine
                 }
-            } else {
-                Text("No data")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                deleteButton
             }
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
     }
 
-    @ViewBuilder
-    private var metaLine: some View {
-        if let snapshot {
-            HStack(spacing: 4) {
-                if let plan = account.note {
-                    Text(plan.capitalized)
-                }
-                Text(snapshot.usageStatus.displayLabel)
-                    .foregroundStyle(snapshot.usageStatus.color)
-                if let nextResetAt = snapshot.nextResetAt, snapshot.usageStatus == .coolingDown {
-                    Text("· \(countdownString(until: nextResetAt))")
-                        .foregroundStyle(.orange)
-                }
+    private var topLine: some View {
+        HStack(spacing: 6) {
+            Text(presentation.title)
+                .font(.system(size: 12.5, weight: .semibold))
+                .lineLimit(1)
+
+            if let priorityChip = metadata.priority == .none ? nil : PresentationChip(
+                text: metadata.priority.displayLabel,
+                tone: .blue,
+                style: .filled
+            ) {
+                chip(priorityChip)
             }
-            .font(.caption2)
-            .lineLimit(1)
-        } else if let plan = account.note {
-            Text(plan.capitalized)
+
+            Spacer(minLength: 6)
+
+            if let usageSummary = presentation.usageSummary {
+                chip(usageSummary)
+            }
+        }
+    }
+
+    private var metaLine: some View {
+        HStack(spacing: 5) {
+            ForEach(Array(presentation.chips.enumerated()), id: \.offset) { _, chip in
+                self.chip(chip)
+            }
+        }
+        .font(.caption2)
+        .lineLimit(1)
+    }
+
+    private func usageSection(_ snapshot: UsageSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(presentation.usageBars, id: \.label) { bar in
+                usageBar(label: bar.label, remainingPercent: bar.remainingPercent)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+        )
+    }
+
+    private var notePreview: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "note.text")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.tertiary)
+
+            Text(presentation.notePreview ?? "")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(2)
         }
+    }
+
+    private var footerLine: some View {
+        Group {
+            if let syncText = presentation.syncText {
+                Text(syncText)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private var deleteButton: some View {
+        Button(action: onDelete) {
+            Image(systemName: "trash")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help("Delete account")
+    }
+
+    private func chip(_ chip: PresentationChip) -> some View {
+        Text(chip.text)
+            .font(
+                chip.monospaced
+                    ? .system(size: 10.5).monospacedDigit()
+                    : .system(size: 10.5, weight: .medium)
+            )
+            .foregroundStyle(chip.style.foreground(for: chip.tone.color))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(chip.style.background(for: chip.tone.color))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(chip.style.border(for: chip.tone.color), lineWidth: chip.style == .outlined ? 1 : 0)
+            )
     }
 
     private var statusDot: some View {
@@ -88,9 +144,7 @@ struct AccountRowView: View {
             .frame(width: 7, height: 7)
     }
 
-    private func usageBar(label: String, usedPercent: Double) -> some View {
-        let remaining = remainingPercent(from: usedPercent)
-
+    private func usageBar(label: String, remainingPercent: Int) -> some View {
         return HStack(spacing: 7) {
             Text(label)
                 .font(.system(size: 10, weight: .semibold).monospaced())
@@ -103,16 +157,16 @@ struct AccountRowView: View {
                         .fill(Color.secondary.opacity(0.18))
                         .frame(height: 4)
                     Capsule()
-                        .fill(barColor(forRemaining: remaining))
-                        .frame(width: geo.size.width * min(remaining / 100, 1), height: 4)
+                        .fill(barColor(forRemaining: Double(remainingPercent)))
+                        .frame(width: geo.size.width * min(Double(remainingPercent) / 100, 1), height: 4)
                 }
             }
             .frame(height: 4)
 
             HStack {
-                Text("\(Int(remaining))%")
+                Text("\(remainingPercent)%")
                     .font(.system(size: 10.5).monospacedDigit())
-                    .foregroundStyle(barColor(forRemaining: remaining))
+                    .foregroundStyle(barColor(forRemaining: Double(remainingPercent)))
             }
             .frame(width: 34, alignment: .trailing)
         }
@@ -122,5 +176,46 @@ struct AccountRowView: View {
         if percent <= 10 { return .red }
         if percent <= 30 { return .yellow }
         return .green
+    }
+}
+
+private extension PresentationTone {
+    var color: Color {
+        switch self {
+        case .secondary:
+            return .secondary
+        case .blue:
+            return .blue
+        case .green:
+            return .green
+        case .orange:
+            return .orange
+        case .red:
+            return .red
+        }
+    }
+}
+
+private extension PresentationChipStyle {
+    func foreground(for color: Color) -> Color {
+        color
+    }
+
+    func background(for color: Color) -> Color {
+        switch self {
+        case .filled:
+            return color.opacity(0.14)
+        case .outlined:
+            return .clear
+        }
+    }
+
+    func border(for color: Color) -> Color {
+        switch self {
+        case .filled:
+            return .clear
+        case .outlined:
+            return color.opacity(0.25)
+        }
     }
 }

@@ -29,13 +29,6 @@ enum UsageStatus: String, Codable {
     }
 }
 
-enum SubscriptionStatus: String, Codable {
-    case active
-    case expiringSoon
-    case expired
-    case unknown
-}
-
 struct UsageSnapshot: Identifiable, Equatable {
     let id: UUID
     var accountId: UUID
@@ -44,7 +37,6 @@ struct UsageSnapshot: Identifiable, Equatable {
     var nextResetAt: Date?
     var subscriptionExpiresAt: Date?
     var usageStatus: UsageStatus
-    var subscriptionStatus: SubscriptionStatus
     var sourceConfidence: Double
     var lastSyncedAt: Date?
 
@@ -72,7 +64,7 @@ extension UsageSnapshot: Codable {
         nextResetAt          = try c.decodeIfPresent(Date.self,      forKey: .nextResetAt)
         subscriptionExpiresAt = try c.decodeIfPresent(Date.self,     forKey: .subscriptionExpiresAt)
         usageStatus          = try c.decode(UsageStatus.self,        forKey: .usageStatus)
-        subscriptionStatus   = try c.decode(SubscriptionStatus.self, forKey: .subscriptionStatus)
+        _ = try c.decodeIfPresent(SubscriptionDerivedState.self,     forKey: .subscriptionStatus)
         sourceConfidence     = try c.decode(Double.self,             forKey: .sourceConfidence)
         lastSyncedAt         = try c.decodeIfPresent(Date.self,      forKey: .lastSyncedAt)
         rawExtractedStrings  = []
@@ -87,7 +79,6 @@ extension UsageSnapshot: Codable {
         try c.encodeIfPresent(nextResetAt,           forKey: .nextResetAt)
         try c.encodeIfPresent(subscriptionExpiresAt, forKey: .subscriptionExpiresAt)
         try c.encode(usageStatus,          forKey: .usageStatus)
-        try c.encode(subscriptionStatus,   forKey: .subscriptionStatus)
         try c.encode(sourceConfidence,     forKey: .sourceConfidence)
         try c.encodeIfPresent(lastSyncedAt,          forKey: .lastSyncedAt)
     }
