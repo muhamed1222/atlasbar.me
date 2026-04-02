@@ -75,6 +75,8 @@ struct AppStrings {
     var account: String { tr(en: "Account", ru: "Аккаунт") }
     var provider: String { tr(en: "Provider", ru: "Провайдер") }
     var subscription: String { tr(en: "Subscription", ru: "Подписка") }
+    var reset: String { tr(en: "Reset", ru: "Сброс") }
+    var time: String { tr(en: "Time", ru: "Время") }
     var lastSync: String { tr(en: "Last sync", ru: "Последняя синхронизация") }
     var nextReset: String { tr(en: "Next reset", ru: "Следующий сброс") }
     var selectAccount: String { tr(en: "Select an account", ru: "Выберите аккаунт") }

@@ -6,7 +6,13 @@ struct AccountRowView: View {
     let metadata: AccountMetadata
     let onDelete: () -> Void
     let language: ResolvedAppLanguage
-    @State private var isHovered = false
+    private let detailRowHeight: CGFloat = 24
+    private let detailRowSpacing: CGFloat = 3
+    private let metricsBlockPadding: CGFloat = 3
+
+    private var metricsBlockHeight: CGFloat {
+        (detailRowHeight * 3) + (detailRowSpacing * 2) + (metricsBlockPadding * 2)
+    }
 
     private var presentation: AccountRowPresentation {
         makeAccountRowPresentation(
@@ -42,7 +48,7 @@ struct AccountRowView: View {
         VStack(alignment: .leading, spacing: 6) {
             headerLine
 
-            if presentation.statusChip != nil || presentation.subscriptionChip != nil {
+            if presentation.statusChip != nil {
                 summaryLine
             }
 
@@ -57,23 +63,14 @@ struct AccountRowView: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 7)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(isHovered ? 0.045 : 0))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(isHovered ? 0.06 : 0), lineWidth: 1)
+                .fill(Color.primary.opacity(0.045))
         )
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.14)) {
-                isHovered = hovering
-            }
-        }
     }
 
     private var headerLine: some View {
@@ -98,17 +95,26 @@ struct AccountRowView: View {
     private var summaryLine: some View {
         HStack(spacing: 4) {
             if let statusChip = presentation.statusChip {
-                chip(statusChip, softened: presentation.resetAccent != nil)
-            }
-
-            if let subscriptionChip = presentation.subscriptionChip {
-                chip(subscriptionChip, softened: presentation.resetAccent != nil)
+                chip(statusChip)
             }
         }
     }
 
     private var metricsLine: some View {
         HStack(alignment: .center, spacing: 8) {
+            if sessionUsage != nil || weeklyUsage != nil {
+                gaugeCluster
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                timeDetailsBlock
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var gaugeCluster: some View {
+        HStack(alignment: .center, spacing: 6) {
             if let sessionUsage {
                 usageDialCard(
                     title: strings.session,
@@ -124,41 +130,66 @@ struct AccountRowView: View {
                     tone: barColor(forRemaining: Double(weeklyUsage.remainingPercent))
                 )
             }
-
-            VStack(alignment: .leading, spacing: 4) {
-                infoStrip
-
-                if let syncText = presentation.syncText {
-                    Text(syncText)
-                        .font(.system(size: 9.5, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 7)
+        .frame(height: metricsBlockHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.028))
+        )
     }
 
-    private var infoStrip: some View {
-        Group {
+    private var timeDetailsBlock: some View {
+        VStack(alignment: .leading, spacing: detailRowSpacing) {
             if let resetAccent = presentation.resetAccent {
-                resetStrip(resetAccent)
-            } else if let subscriptionChip = presentation.subscriptionChip {
-                summaryStrip(
-                    title: strings.subscription,
-                    value: subscriptionChip.text,
-                    tone: subscriptionChip.tone.color
+                detailRow(
+                    title: strings.reset,
+                    value: resetAccent.countdownValue,
+                    tone: .orange
                 )
-            } else if let statusChip = presentation.statusChip {
-                summaryStrip(
+
+                detailRow(
+                    title: strings.time,
+                    value: resetAccent.timeText,
+                    tone: .secondary
+                )
+            }
+
+            if let subscriptionValueText {
+                detailRow(
+                    title: strings.subscription,
+                    value: subscriptionValueText,
+                    tone: presentation.subscriptionChip?.tone.color ?? .secondary
+                )
+            } else if presentation.resetAccent == nil, let statusChip = presentation.statusChip {
+                detailRow(
                     title: strings.account,
                     value: statusChip.text,
                     tone: statusChip.tone.color
                 )
-            } else {
-                EmptyView()
             }
         }
+        .padding(.horizontal, metricsBlockPadding)
+        .padding(.vertical, metricsBlockPadding)
+        .frame(height: metricsBlockHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.primary.opacity(0.028))
+        )
+    }
+
+    private var subscriptionValueText: String? {
+        guard let subscriptionChip = presentation.subscriptionChip else {
+            return nil
+        }
+
+        let prefix = strings.expires("")
+        if subscriptionChip.text.hasPrefix(prefix) {
+            return String(subscriptionChip.text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        }
+
+        return subscriptionChip.text
     }
 
     private var codexMark: some View {
@@ -231,38 +262,12 @@ struct AccountRowView: View {
         .frame(minHeight: 54)
     }
 
-    private func resetStrip(_ accent: ResetAccentPresentation) -> some View {
-        HStack(spacing: 8) {
-            Text(accent.countdownText)
-                .font(.system(size: 10.5, weight: .semibold))
-                .foregroundStyle(.orange)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-
-            Spacer(minLength: 0)
-
-            Text(accent.timeText)
-                .font(.system(size: 9, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3.5)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color.orange.opacity(0.04))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(Color.orange.opacity(0.08), lineWidth: 1)
-        )
-    }
-
-    private func summaryStrip(title: String, value: String, tone: Color) -> some View {
+    private func detailRow(title: String, value: String, tone: Color) -> some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 9.5, weight: .medium))
+                .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.secondary)
+                .frame(width: 66, alignment: .leading)
 
             Spacer(minLength: 0)
 
@@ -272,8 +277,8 @@ struct AccountRowView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .padding(.horizontal, 1)
-        .padding(.vertical, 2)
+        .padding(.horizontal, 8)
+        .frame(height: detailRowHeight)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.primary.opacity(0.028))
@@ -290,24 +295,28 @@ struct AccountRowView: View {
 private struct UsageDialView: View {
     let remainingPercent: Int
     let tone: Color
+    private let gaugeLineWidth: CGFloat = 4.0
 
     var body: some View {
         ZStack {
             GaugeArcShape(progress: 1)
-                .stroke(Color.secondary.opacity(0.16), style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                .stroke(
+                    Color.secondary.opacity(0.16),
+                    style: StrokeStyle(lineWidth: gaugeLineWidth, lineCap: .round)
+                )
 
             GaugeArcShape(progress: Double(remainingPercent) / 100)
                 .stroke(
                     tone,
-                    style: StrokeStyle(lineWidth: 7, lineCap: .round)
+                    style: StrokeStyle(lineWidth: gaugeLineWidth, lineCap: .round)
                 )
 
             VStack(spacing: 1) {
                 Text("\(remainingPercent)")
-                    .font(.system(size: 13.5, weight: .bold).monospacedDigit())
+                    .font(.system(size: 11.5, weight: .bold).monospacedDigit())
                     .foregroundStyle(.primary)
                 Text("%")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.system(size: 7.5, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
         }

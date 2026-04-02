@@ -54,7 +54,7 @@ struct CodexMarkView: View {
         var glyphColor: Color {
             switch self {
             case .standard:
-                return Color.black.opacity(0.8)
+                return Color.white.opacity(0.94)
             case .elevated:
                 return Color.white.opacity(0.96)
             }

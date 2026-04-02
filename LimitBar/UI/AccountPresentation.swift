@@ -28,6 +28,7 @@ struct UsageBarPresentation: Equatable {
 struct ResetAccentPresentation: Equatable {
     var title: String
     var countdownText: String
+    var countdownValue: String
     var timeText: String
     var summaryText: String
 }
@@ -283,6 +284,7 @@ private func resetAccent(for snapshot: UsageSnapshot?, now: Date, language: Reso
     return ResetAccentPresentation(
         title: strings.sessionReset,
         countdownText: countdownText,
+        countdownValue: countdown,
         timeText: timeText,
         summaryText: strings.sessionResetSummary(time: timeText, countdown: countdown)
     )
