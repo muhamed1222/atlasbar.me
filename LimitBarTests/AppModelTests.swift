@@ -375,6 +375,31 @@ struct AppModelTests {
     }
 
     @Test
+    func setLanguageUpdatesLocalizedCompactLabel() {
+        let model = AppModel(shouldStartPolling: false)
+        let account = Account(id: UUID(), provider: "Codex", email: "lang@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: nil,
+            weeklyPercentUsed: nil,
+            nextResetAt: nil,
+            subscriptionExpiresAt: nil,
+            usageStatus: .stale,
+            sourceConfidence: 1,
+            lastSyncedAt: Date(),
+            rawExtractedStrings: []
+        )
+
+        model.accounts = [account]
+        model.snapshots = [snapshot]
+        model.setLanguage(.russian)
+
+        #expect(model.settings.language == .russian)
+        #expect(model.compactLabel == "Устарел")
+    }
+
+    @Test
     func updateMetadataPersistsPriorityAndNoteInMemory() {
         let model = AppModel(shouldStartPolling: false)
         model.resetAllData()
@@ -773,9 +798,13 @@ struct AppModelTests {
 
         await model.refreshNowAsync()
 
-        #expect(model.compactLabel == "Stale")
+        #expect(model.compactLabel == staleUsageLabel(hasSnapshots: true, language: model.resolvedLanguage))
         #expect(model.snapshots.first?.usageStatus == .stale)
-        #expect(model.snapshots.first.map(shortUsageLabel) == "Stale")
+        #expect(
+            model.snapshots.first.map {
+                shortUsageLabel(snapshot: $0, language: model.resolvedLanguage)
+            } == staleUsageLabel(hasSnapshots: true, language: model.resolvedLanguage)
+        )
         #expect(notifications.scheduled.isEmpty)
     }
 

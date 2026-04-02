@@ -93,6 +93,7 @@ struct UsageStateCoordinator {
             weeklyPercentUsed: payload.weeklyPercentUsed,
             nextResetAt: payload.nextResetAt,
             subscriptionExpiresAt: payload.subscriptionExpiresAt,
+            planType: payload.planType ?? state.snapshots.last(where: { $0.accountId == accountId })?.planType,
             usageStatus: payload.usageStatus,
             sourceConfidence: payload.sourceConfidence,
             lastSyncedAt: Date(),
@@ -174,7 +175,7 @@ struct UsageStateCoordinator {
         let latestSnapshot = snapshots.sorted(by: {
             ($0.lastSyncedAt ?? .distantPast) > ($1.lastSyncedAt ?? .distantPast)
         }).first
-        return latestSnapshot.map(shortUsageLabel) ?? staleUsageLabel(hasSnapshots: true)
+        return latestSnapshot.map { shortUsageLabel(snapshot: $0) } ?? staleUsageLabel(hasSnapshots: true)
     }
 
     private func upsertAccount(

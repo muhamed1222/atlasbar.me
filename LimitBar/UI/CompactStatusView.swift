@@ -4,7 +4,10 @@ struct CompactStatusView: View {
     @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
-        Text(appModel.compactLabel)
-            .monospacedDigit()
+        HStack(spacing: 5) {
+            CodexMarkView(size: .compact)
+            Text(appModel.compactLabel)
+                .monospacedDigit()
+        }
     }
 }

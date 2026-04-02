@@ -25,10 +25,21 @@ struct UsageBarPresentation: Equatable {
     var remainingPercent: Int
 }
 
+struct ResetAccentPresentation: Equatable {
+    var title: String
+    var countdownText: String
+    var timeText: String
+    var summaryText: String
+}
+
 struct AccountRowPresentation: Equatable {
     var title: String
+    var planLabel: String?
     var usageSummary: PresentationChip?
     var chips: [PresentationChip]
+    var statusChip: PresentationChip?
+    var subscriptionChip: PresentationChip?
+    var resetAccent: ResetAccentPresentation?
     var usageBars: [UsageBarPresentation]
     var notePreview: String?
     var syncText: String?
@@ -38,6 +49,7 @@ struct AccountsListRowPresentation: Equatable {
     var title: String
     var priorityChip: PresentationChip?
     var chips: [PresentationChip]
+    var resetAccent: ResetAccentPresentation?
     var notePreview: String?
 }
 
@@ -49,8 +61,10 @@ struct AccountDetailPresentation: Equatable {
 
     var title: String
     var providerLine: String
+    var planLabel: String?
     var priorityChip: PresentationChip?
     var summaryChips: [PresentationChip]
+    var resetAccent: ResetAccentPresentation?
     var identityRows: [IdentityRow]
     var noteFooter: String
     var noteCharacterCount: String
@@ -60,11 +74,17 @@ func makeAccountRowPresentation(
     account: Account,
     snapshot: UsageSnapshot?,
     metadata: AccountMetadata,
-    now: Date = .now
+    now: Date = .now,
+    language: ResolvedAppLanguage = .english
 ) -> AccountRowPresentation {
+    let strings = AppStrings(language: language)
+    let statusChip = rowStatusChip(for: snapshot, language: language)
+    let rowSubscriptionChip: PresentationChip? = snapshot.flatMap { item in
+        subscriptionChip(for: item, now: now, language: language)
+    }
     let usageSummary = snapshot.map { snapshot in
         PresentationChip(
-            text: usageSummaryText(for: snapshot, now: now),
+            text: usageSummaryText(for: snapshot, now: now, language: language),
             tone: .secondary,
             style: .outlined,
             monospaced: true
@@ -74,20 +94,23 @@ func makeAccountRowPresentation(
     var chips: [PresentationChip] = [
         PresentationChip(text: account.provider, tone: .secondary, style: .outlined)
     ]
+    let resetAccent = resetAccent(for: snapshot, now: now, language: language)
 
     if let snapshot {
         chips.append(
             PresentationChip(
-                text: snapshot.usageStatus.displayLabel,
+                text: snapshot.usageStatus.displayLabel(language: language),
                 tone: tone(for: snapshot.usageStatus),
                 style: .filled
             )
         )
 
-        if let nextResetAt = snapshot.nextResetAt, snapshot.usageStatus == .coolingDown {
+        if resetAccent == nil,
+           let nextResetAt = snapshot.nextResetAt,
+           snapshot.usageStatus == .coolingDown {
             chips.append(
                 PresentationChip(
-                    text: countdownString(until: nextResetAt, now: now),
+                    text: countdownString(until: nextResetAt, now: now, language: language),
                     tone: .orange,
                     style: .outlined,
                     monospaced: true
@@ -95,20 +118,26 @@ func makeAccountRowPresentation(
             )
         }
 
-        if let chip = subscriptionChip(for: snapshot, now: now) {
+        if let chip = subscriptionChip(for: snapshot, now: now, language: language) {
             chips.append(chip)
         }
     } else {
-        chips.append(PresentationChip(text: "No data", tone: .secondary, style: .outlined))
+        chips.append(PresentationChip(text: strings.noData, tone: .secondary, style: .outlined))
     }
 
     let usageBars = usageBarsPresentation(snapshot: snapshot)
-    let syncText = snapshot?.lastSyncedAt.map { "Synced \($0.formatted(.relative(presentation: .named)))" }
+    let syncText = snapshot?.lastSyncedAt.map {
+        strings.synced(localizedRelativeDate($0, language: language, now: now))
+    }
 
     return AccountRowPresentation(
         title: account.displayName,
+        planLabel: planBadgeText(for: snapshot?.planType),
         usageSummary: usageSummary,
         chips: chips,
+        statusChip: statusChip,
+        subscriptionChip: rowSubscriptionChip,
+        resetAccent: resetAccent,
         usageBars: usageBars,
         notePreview: metadata.hasNote ? metadata.trimmedNote : nil,
         syncText: syncText
@@ -119,7 +148,8 @@ func makeAccountsListRowPresentation(
     account: Account,
     snapshot: UsageSnapshot?,
     metadata: AccountMetadata,
-    now: Date = .now
+    now: Date = .now,
+    language: ResolvedAppLanguage = .english
 ) -> AccountsListRowPresentation {
     var chips: [PresentationChip] = [
         PresentationChip(text: account.provider, tone: .secondary, style: .outlined)
@@ -128,13 +158,13 @@ func makeAccountsListRowPresentation(
     if let snapshot {
         chips.append(
             PresentationChip(
-                text: snapshot.usageStatus.displayLabel,
+                text: snapshot.usageStatus.displayLabel(language: language),
                 tone: tone(for: snapshot.usageStatus),
                 style: .filled
             )
         )
 
-        if let chip = subscriptionChip(for: snapshot, now: now) {
+        if let chip = subscriptionChip(for: snapshot, now: now, language: language) {
             chips.append(chip)
         }
     }
@@ -143,8 +173,9 @@ func makeAccountsListRowPresentation(
         title: account.displayName,
         priorityChip: metadata.priority == .none
             ? nil
-            : PresentationChip(text: metadata.priority.displayLabel, tone: .blue, style: .filled),
+            : PresentationChip(text: metadata.priority.displayLabel(language: language), tone: .blue, style: .filled),
         chips: chips,
+        resetAccent: resetAccent(for: snapshot, now: now, language: language),
         notePreview: metadata.hasNote ? metadata.trimmedNote : nil
     )
 }
@@ -153,19 +184,28 @@ func makeAccountDetailPresentation(
     account: Account,
     snapshot: UsageSnapshot?,
     metadata: AccountMetadata,
-    now: Date = .now
+    now: Date = .now,
+    language: ResolvedAppLanguage = .english
 ) -> AccountDetailPresentation {
+    let strings = AppStrings(language: language)
     var identityRows = [
-        AccountDetailPresentation.IdentityRow(title: "Account", value: account.displayName),
-        AccountDetailPresentation.IdentityRow(title: "Provider", value: account.provider),
-        AccountDetailPresentation.IdentityRow(title: "Subscription", value: subscriptionText(for: snapshot, now: now))
+        AccountDetailPresentation.IdentityRow(title: strings.account, value: account.displayName),
+        AccountDetailPresentation.IdentityRow(title: strings.provider, value: account.provider),
+        AccountDetailPresentation.IdentityRow(title: strings.subscription, value: subscriptionText(for: snapshot, now: now, language: language))
     ]
+
+    if let planLabel = planBadgeText(for: snapshot?.planType) {
+        identityRows.insert(
+            AccountDetailPresentation.IdentityRow(title: strings.plan, value: planLabel),
+            at: 2
+        )
+    }
 
     if let lastSyncedAt = snapshot?.lastSyncedAt {
         identityRows.append(
             AccountDetailPresentation.IdentityRow(
-                title: "Last sync",
-                value: lastSyncedAt.formatted(.relative(presentation: .named))
+                title: strings.lastSync,
+                value: localizedRelativeDate(lastSyncedAt, language: language, now: now)
             )
         )
     }
@@ -174,18 +214,18 @@ func makeAccountDetailPresentation(
     if let snapshot {
         summaryChips.append(
             PresentationChip(
-                text: snapshot.usageStatus.displayLabel,
+                text: snapshot.usageStatus.displayLabel(language: language),
                 tone: tone(for: snapshot.usageStatus),
                 style: .filled
             )
         )
     } else {
-        summaryChips.append(PresentationChip(text: "Unknown status", tone: .secondary, style: .outlined))
+        summaryChips.append(PresentationChip(text: strings.unknownStatus, tone: .secondary, style: .outlined))
     }
 
     summaryChips.append(
         PresentationChip(
-            text: subscriptionText(for: snapshot, now: now),
+            text: subscriptionText(for: snapshot, now: now, language: language),
             tone: subscriptionTone(for: snapshot, now: now),
             style: .outlined
         )
@@ -193,16 +233,18 @@ func makeAccountDetailPresentation(
 
     return AccountDetailPresentation(
         title: account.displayName,
-        providerLine: "Provider: \(account.provider)",
+        providerLine: "\(strings.provider): \(account.provider)",
+        planLabel: planBadgeText(for: snapshot?.planType),
         priorityChip: metadata.priority == .none
             ? nil
-            : PresentationChip(text: metadata.priority.displayLabel, tone: .blue, style: .filled),
+            : PresentationChip(text: metadata.priority.displayLabel(language: language), tone: .blue, style: .filled),
         summaryChips: summaryChips,
+        resetAccent: resetAccent(for: snapshot, now: now, language: language),
         identityRows: identityRows,
         noteFooter: metadata.hasNote
-            ? "Saved locally for this account"
-            : "Optional note for renewal context, handoff, or reminders",
-        noteCharacterCount: "\(metadata.trimmedNote.count) characters"
+            ? strings.savedLocalNoteFooter
+            : strings.optionalNoteFooter,
+        noteCharacterCount: strings.charactersCount(metadata.trimmedNote.count)
     )
 }
 
@@ -221,32 +263,73 @@ private func usageBarsPresentation(snapshot: UsageSnapshot?) -> [UsageBarPresent
     return bars
 }
 
-private func usageSummaryText(for snapshot: UsageSnapshot, now: Date) -> String {
+private func usageSummaryText(for snapshot: UsageSnapshot, now: Date, language: ResolvedAppLanguage) -> String {
     if let nextResetAt = snapshot.nextResetAt, snapshot.usageStatus == .coolingDown {
-        return countdownString(until: nextResetAt, now: now)
+        return countdownString(until: nextResetAt, now: now, language: language)
     }
-    return shortUsageLabel(snapshot: snapshot)
+    return shortUsageLabel(snapshot: snapshot, language: language)
 }
 
-private func subscriptionChip(for snapshot: UsageSnapshot, now: Date) -> PresentationChip? {
+private func resetAccent(for snapshot: UsageSnapshot?, now: Date, language: ResolvedAppLanguage) -> ResetAccentPresentation? {
+    guard let nextResetAt = snapshot?.nextResetAt,
+          isResetSoon(nextResetAt, now: now) else {
+        return nil
+    }
+
+    let strings = AppStrings(language: language)
+    let countdown = resetCountdownString(until: nextResetAt, now: now, language: language)
+    let countdownText = strings.resetsIn(countdown)
+    let timeText = localizedTimeOfDay(nextResetAt, language: language)
+    return ResetAccentPresentation(
+        title: strings.sessionReset,
+        countdownText: countdownText,
+        timeText: timeText,
+        summaryText: strings.sessionResetSummary(time: timeText, countdown: countdown)
+    )
+}
+
+private func subscriptionChip(for snapshot: UsageSnapshot, now: Date, language: ResolvedAppLanguage) -> PresentationChip? {
+    let strings = AppStrings(language: language)
     switch SubscriptionDerivedState.from(expiryDate: snapshot.subscriptionExpiresAt, now: now) {
     case .active:
         return PresentationChip(
-            text: subscriptionText(for: snapshot, now: now),
+            text: subscriptionText(for: snapshot, now: now, language: language),
             tone: .secondary,
             style: .outlined
         )
     case .expiringSoon:
         return PresentationChip(
-            text: subscriptionText(for: snapshot, now: now),
+            text: subscriptionText(for: snapshot, now: now, language: language),
             tone: .orange,
             style: .outlined
         )
     case .expired:
-        return PresentationChip(text: "Expired", tone: .red, style: .outlined)
+        return PresentationChip(text: strings.expired, tone: .red, style: .outlined)
     case .unknown:
         return nil
     }
+}
+
+private func isResetSoon(_ date: Date, now: Date) -> Bool {
+    let interval = date.timeIntervalSince(now)
+    return interval > 0 && interval <= 24 * 60 * 60
+}
+
+private func resetCountdownString(until date: Date, now: Date, language: ResolvedAppLanguage) -> String {
+    let remaining = max(0, Int(date.timeIntervalSince(now)))
+    let hours = remaining / 3600
+    let minutes = (remaining % 3600) / 60
+
+    if hours > 0, minutes == 0 {
+        return "\(hours)h"
+    }
+    if hours > 0 {
+        return "\(hours)h \(minutes)m"
+    }
+    if minutes > 0 {
+        return "\(minutes)m"
+    }
+    return AppStrings(language: language).ready.lowercased()
 }
 
 private func subscriptionTone(for snapshot: UsageSnapshot?, now: Date) -> PresentationTone {
@@ -266,22 +349,68 @@ private func subscriptionTone(for snapshot: UsageSnapshot?, now: Date) -> Presen
     }
 }
 
-private func subscriptionText(for snapshot: UsageSnapshot?, now: Date) -> String {
+private func subscriptionText(for snapshot: UsageSnapshot?, now: Date, language: ResolvedAppLanguage) -> String {
+    let strings = AppStrings(language: language)
     guard let snapshot else {
-        return "Unknown"
+        return strings.unknownStatus
     }
 
     switch SubscriptionDerivedState.from(expiryDate: snapshot.subscriptionExpiresAt, now: now) {
     case .active, .expiringSoon:
         guard let expiry = snapshot.subscriptionExpiresAt else {
-            return "Unknown"
+            return strings.unknownStatus
         }
-        return expiryDateLabel(expiry, now: now)
+        return expiryDateLabel(expiry, now: now, language: language)
     case .expired:
-        return "Expired"
+        return strings.expired
     case .unknown:
-        return "Unknown"
+        return strings.unknownStatus
     }
+}
+
+private func planBadgeText(for rawPlanType: String?) -> String? {
+    guard let rawPlanType = rawPlanType?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !rawPlanType.isEmpty else {
+        return nil
+    }
+
+    let normalized = rawPlanType.lowercased()
+    if normalized.contains("enterprise") {
+        return "Enterprise"
+    }
+    if normalized.contains("team") {
+        return "Team"
+    }
+    if normalized.contains("plus") {
+        return "Plus"
+    }
+    if normalized.contains("pro") {
+        return "Pro"
+    }
+    if normalized == "go" || normalized.contains("go") {
+        return "Go"
+    }
+    if normalized.contains("free") {
+        return "Free"
+    }
+
+    return rawPlanType.prefix(1).uppercased() + rawPlanType.dropFirst()
+}
+
+private func rowStatusChip(for snapshot: UsageSnapshot?, language: ResolvedAppLanguage) -> PresentationChip? {
+    guard let snapshot else {
+        return nil
+    }
+
+    guard snapshot.usageStatus != .available else {
+        return nil
+    }
+
+    return PresentationChip(
+        text: snapshot.usageStatus.displayLabel(language: language),
+        tone: tone(for: snapshot.usageStatus),
+        style: .filled
+    )
 }
 
 private func tone(for status: UsageStatus) -> PresentationTone {

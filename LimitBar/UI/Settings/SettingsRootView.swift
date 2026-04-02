@@ -7,14 +7,15 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    func title(language: ResolvedAppLanguage) -> String {
+        let strings = AppStrings(language: language)
         switch self {
         case .general:
-            return "General"
+            return strings.general
         case .notifications:
-            return "Notifications"
+            return strings.notifications
         case .accounts:
-            return "Accounts"
+            return strings.accounts
         }
     }
 
@@ -37,7 +38,7 @@ struct SettingsRootView: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsSection.allCases, selection: $selection) { section in
-                Label(section.title, systemImage: section.systemImage)
+                Label(section.title(language: appModel.resolvedLanguage), systemImage: section.systemImage)
                     .tag(section)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)

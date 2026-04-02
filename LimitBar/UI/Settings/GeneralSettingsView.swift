@@ -4,16 +4,18 @@ struct GeneralSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
+        let strings = appModel.strings
+
         Form {
-            Section("Polling") {
+            Section(strings.polling) {
                 Stepper(
                     value: runningIntervalBinding,
                     in: 5...60,
                     step: 5
                 ) {
                     settingRow(
-                        title: "While Codex is running",
-                        value: "\(Int(runningIntervalBinding.wrappedValue)) seconds"
+                        title: strings.whileCodexRunning,
+                        value: strings.seconds(Int(runningIntervalBinding.wrappedValue))
                     )
                 }
 
@@ -23,14 +25,28 @@ struct GeneralSettingsView: View {
                     step: 15
                 ) {
                     settingRow(
-                        title: "While Codex is closed",
-                        value: "\(Int(closedIntervalBinding.wrappedValue)) seconds"
+                        title: strings.whileCodexClosed,
+                        value: strings.seconds(Int(closedIntervalBinding.wrappedValue))
                     )
+                }
+            }
+
+            Section(strings.languageTitle) {
+                Picker(
+                    strings.appLanguage,
+                    selection: Binding(
+                        get: { appModel.settings.language },
+                        set: { appModel.setLanguage($0) }
+                    )
+                ) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.displayLabel(language: appModel.resolvedLanguage)).tag(language)
+                    }
                 }
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("General")
+        .navigationTitle(strings.general)
     }
 
     private var runningIntervalBinding: Binding<Double> {

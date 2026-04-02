@@ -5,6 +5,8 @@ struct AccountsSettingsView: View {
     @State private var selection: UUID?
 
     var body: some View {
+        let strings = appModel.strings
+
         HSplitView {
             List(appModel.sortedAccounts, selection: $selection) { account in
                 accountListRow(account)
@@ -17,15 +19,15 @@ struct AccountsSettingsView: View {
                     accountDetail(selectedAccount)
                 } else {
                     ContentUnavailableView(
-                        "Select an account",
+                        strings.selectAccount,
                         systemImage: "person.crop.circle.badge.questionmark",
-                        description: Text("Choose an account from the list to edit priority and note.")
+                        description: Text(strings.selectAccountDescription)
                     )
                 }
             }
             .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationTitle("Accounts")
+        .navigationTitle(strings.accounts)
         .onAppear {
             if selection == nil {
                 selection = appModel.sortedAccounts.first?.id
@@ -48,37 +50,43 @@ struct AccountsSettingsView: View {
 
     @ViewBuilder
     private func accountDetail(_ account: Account) -> some View {
+        let strings = appModel.strings
         let metadata = appModel.metadata(for: account.id)
         let snapshot = appModel.snapshot(for: account.id)
-        let presentation = makeAccountDetailPresentation(account: account, snapshot: snapshot, metadata: metadata)
+        let presentation = makeAccountDetailPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: metadata,
+            language: appModel.resolvedLanguage
+        )
 
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 accountSummaryCard(presentation)
 
                 Form {
-                    Section("Identity") {
+                    Section(strings.identity) {
                         ForEach(presentation.identityRows, id: \.title) { row in
                             detailRow(row.title, value: row.value)
                         }
                     }
 
-                    Section("Priority") {
+                    Section(strings.priority) {
                         Picker(
-                            "Priority",
+                            strings.priority,
                             selection: Binding(
                                 get: { appModel.metadata(for: account.id).priority },
                                 set: { appModel.updatePriority($0, for: account.id) }
                             )
                         ) {
                             ForEach(AccountPriority.allCases, id: \.self) { priority in
-                                Text(priority.displayLabel).tag(priority)
+                                Text(priority.displayLabel(language: appModel.resolvedLanguage)).tag(priority)
                             }
                         }
                         .pickerStyle(.segmented)
                     }
 
-                    Section("Note") {
+                    Section(strings.note) {
                         VStack(alignment: .leading, spacing: 8) {
                             TextEditor(
                                 text: Binding(
@@ -128,10 +136,16 @@ struct AccountsSettingsView: View {
     private func accountListRow(_ account: Account) -> some View {
         let metadata = appModel.metadata(for: account.id)
         let snapshot = appModel.snapshot(for: account.id)
-        let presentation = makeAccountsListRowPresentation(account: account, snapshot: snapshot, metadata: metadata)
+        let presentation = makeAccountsListRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: metadata,
+            language: appModel.resolvedLanguage
+        )
 
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
+                CodexMarkView(size: .regular, style: .elevated)
                 Text(presentation.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
@@ -152,6 +166,11 @@ struct AccountsSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            } else if let resetAccent = presentation.resetAccent {
+                Label(resetAccent.countdownText, systemImage: "timer")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
             }
         }
         .padding(.vertical, 3)
@@ -160,13 +179,17 @@ struct AccountsSettingsView: View {
     private func accountSummaryCard(_ presentation: AccountDetailPresentation) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(presentation.title)
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(1)
-                    Text(presentation.providerLine)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 10) {
+                    CodexMarkView(size: .prominent, style: .elevated)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(presentation.title)
+                            .font(.title3.weight(.semibold))
+                            .lineLimit(1)
+                        Text(presentation.providerLine)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer()
@@ -181,6 +204,10 @@ struct AccountsSettingsView: View {
                     settingsBadge(chip)
                 }
             }
+
+            if let resetAccent = presentation.resetAccent {
+                nextResetCard(resetAccent)
+            }
         }
         .padding(14)
         .background(
@@ -189,9 +216,67 @@ struct AccountsSettingsView: View {
         )
     }
 
+    private func nextResetCard(_ accent: ResetAccentPresentation) -> some View {
+        let strings = appModel.strings
+
+        return HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "timer")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle()
+                        .fill(Color.orange.opacity(0.14))
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(strings.nextReset)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Text(accent.countdownText)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.orange)
+
+                Text(accent.summaryText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Text(accent.timeText)
+                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color(NSColor.windowBackgroundColor).opacity(0.9))
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.orange.opacity(0.18), lineWidth: 1)
+                )
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.orange.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.orange.opacity(0.16), lineWidth: 1)
+        )
+    }
+
     private func settingsBadge(_ chip: PresentationChip) -> some View {
         Text(chip.text)
-            .font(.system(size: 10.5, weight: .medium))
+            .font(
+                chip.monospaced
+                    ? .system(size: 10.5, weight: .medium).monospacedDigit()
+                    : .system(size: 10.5, weight: .medium)
+            )
             .foregroundStyle(chip.tone.color)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

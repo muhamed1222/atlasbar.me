@@ -21,15 +21,18 @@ struct LimitBarApp: App {
         MenuBarExtra {
             MenuBarRootView()
                 .environmentObject(appModel)
+                .environment(\.locale, appModel.appLocale)
         } label: {
             CompactStatusView()
                 .environmentObject(appModel)
+                .environment(\.locale, appModel.appLocale)
         }
         .menuBarExtraStyle(.window)
 
         Settings {
             SettingsRootView()
                 .environmentObject(appModel)
+                .environment(\.locale, appModel.appLocale)
         }
     }
 }

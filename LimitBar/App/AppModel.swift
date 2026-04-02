@@ -20,6 +20,18 @@ final class AppModel: ObservableObject {
     @Published var accountMetadata: [AccountMetadata] = []
     @Published var settings: AppSettingsState = .default
 
+    var resolvedLanguage: ResolvedAppLanguage {
+        settings.language.resolved()
+    }
+
+    var strings: AppStrings {
+        AppStrings(language: resolvedLanguage)
+    }
+
+    var appLocale: Locale {
+        resolvedLanguage.locale
+    }
+
     private let usageProvider: any CurrentUsageProviding
     private let runningChecker: any CodexRunningChecking
     private let pollingCoordinator: PollingCoordinator
@@ -65,6 +77,7 @@ final class AppModel: ObservableObject {
         snapshots = state.snapshots
         accountMetadata = deduplicatedMetadata(state.accountMetadata, for: state.accounts)
         settings = settingsCoordinator.sanitized(state.settings)
+        refreshCompactLabel()
         reconcilePersistedNotifications()
         if shouldStartPolling {
             startPolling()
@@ -129,7 +142,7 @@ final class AppModel: ObservableObject {
             )
             accounts = projection.accounts
             snapshots = projection.snapshots
-            compactLabel = projection.compactLabel
+            refreshCompactLabel()
             accountMetadata.removeAll { $0.accountId == account.id }
         } catch {
             logger.error("Failed to delete account from store: \(error)")
@@ -159,6 +172,12 @@ final class AppModel: ObservableObject {
         } else {
             updated.pollingWhenClosed = interval
         }
+        applySettings(updated)
+    }
+
+    func setLanguage(_ language: AppLanguage) {
+        var updated = settings
+        updated.language = language
         applySettings(updated)
     }
 
@@ -235,10 +254,10 @@ final class AppModel: ObservableObject {
                 let projection = try stateCoordinator.markStale(from: currentPersistedState)
                 accounts = projection.accounts
                 snapshots = projection.snapshots
-                compactLabel = projection.compactLabel
+                refreshCompactLabel()
             } catch {
                 logger.error("Failed to mark usage state stale: \(error)")
-                compactLabel = staleUsageLabel(hasSnapshots: !snapshots.isEmpty)
+                compactLabel = staleUsageLabel(hasSnapshots: !snapshots.isEmpty, language: resolvedLanguage)
             }
             return
         }
@@ -250,7 +269,7 @@ final class AppModel: ObservableObject {
             )
             accounts = projection.accounts
             snapshots = projection.snapshots
-            compactLabel = projection.compactLabel
+            refreshCompactLabel()
             if let accountId = mostRecentlySyncedAccountId() {
                 reconcileRenewalReminders(for: accountId)
             }
@@ -285,7 +304,24 @@ final class AppModel: ObservableObject {
 
     private func applySettings(_ newSettings: AppSettingsState) {
         settings = settingsCoordinator.sanitized(newSettings)
+        refreshCompactLabel()
         persist()
+    }
+
+    private func refreshCompactLabel() {
+        guard !accounts.isEmpty else {
+            compactLabel = "--"
+            return
+        }
+
+        guard let latestSnapshot = snapshots.max(by: {
+            ($0.lastSyncedAt ?? .distantPast) < ($1.lastSyncedAt ?? .distantPast)
+        }) else {
+            compactLabel = "--"
+            return
+        }
+
+        compactLabel = shortUsageLabel(snapshot: latestSnapshot, language: resolvedLanguage)
     }
 
     private func persist() {

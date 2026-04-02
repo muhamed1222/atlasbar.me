@@ -4,10 +4,12 @@ struct NotificationSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
+        let strings = appModel.strings
+
         Form {
-            Section("Cooldown") {
+            Section(strings.cooldown) {
                 Toggle(
-                    "Cooldown ready notifications",
+                    strings.cooldownReadyNotifications,
                     isOn: Binding(
                         get: { appModel.settings.cooldownNotificationsEnabled },
                         set: { appModel.setCooldownNotificationsEnabled($0) }
@@ -16,18 +18,18 @@ struct NotificationSettingsView: View {
             }
 
             Section {
-                reminderToggle("7 days", keyPath: \.days7Enabled)
-                reminderToggle("3 days", keyPath: \.days3Enabled)
-                reminderToggle("1 day", keyPath: \.days1Enabled)
-                reminderToggle("Same day", keyPath: \.sameDayEnabled)
+                reminderToggle(strings.days(7), keyPath: \.days7Enabled)
+                reminderToggle(strings.days(3), keyPath: \.days3Enabled)
+                reminderToggle(strings.oneDay, keyPath: \.days1Enabled)
+                reminderToggle(strings.sameDay, keyPath: \.sameDayEnabled)
             } header: {
-                Text("Renewal reminders")
+                Text(strings.renewalReminders)
             } footer: {
-                Text("Renewal reminders are scheduled automatically from the latest subscription expiry and update when these toggles change.")
+                Text(strings.renewalRemindersFooter)
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Notifications")
+        .navigationTitle(strings.notifications)
     }
 
     private func reminderToggle(

@@ -19,16 +19,7 @@ enum AccountPriority: String, Codable, CaseIterable, Equatable {
         }
     }
 
-    var displayLabel: String {
-        switch self {
-        case .none:
-            return "None"
-        case .primary:
-            return "Primary"
-        case .backup:
-            return "Backup"
-        case .auxiliary:
-            return "Auxiliary"
-        }
+    func displayLabel(language: ResolvedAppLanguage = .english) -> String {
+        AppStrings(language: language).priorityLabel(self)
     }
 }

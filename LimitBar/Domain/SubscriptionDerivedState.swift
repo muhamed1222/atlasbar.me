@@ -19,16 +19,7 @@ enum SubscriptionDerivedState: String, Codable, Equatable {
         return .active
     }
 
-    var displayLabel: String {
-        switch self {
-        case .active:
-            return "Active"
-        case .expiringSoon:
-            return "Expires soon"
-        case .expired:
-            return "Expired"
-        case .unknown:
-            return "Unknown"
-        }
+    func displayLabel(language: ResolvedAppLanguage = .english) -> String {
+        AppStrings(language: language).subscriptionStateLabel(self)
     }
 }

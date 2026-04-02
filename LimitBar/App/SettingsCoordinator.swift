@@ -11,7 +11,8 @@ struct SettingsCoordinator {
             pollingWhenRunning: sanitize(settings.pollingWhenRunning, in: runningRange),
             pollingWhenClosed: sanitize(settings.pollingWhenClosed, in: closedRange),
             cooldownNotificationsEnabled: settings.cooldownNotificationsEnabled,
-            renewalReminders: settings.renewalReminders
+            renewalReminders: settings.renewalReminders,
+            language: settings.language
         )
     }
 

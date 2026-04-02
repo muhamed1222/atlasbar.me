@@ -8,14 +8,8 @@ enum UsageStatus: String, Codable {
     case unknown
     case stale
 
-    var displayLabel: String {
-        switch self {
-        case .available:   return "Available"
-        case .coolingDown: return "Cooling down"
-        case .exhausted:   return "Exhausted"
-        case .unknown:     return "Unknown"
-        case .stale:       return "Stale"
-        }
+    func displayLabel(language: ResolvedAppLanguage = .english) -> String {
+        AppStrings(language: language).statusLabel(self)
     }
 
     var color: Color {
@@ -36,6 +30,7 @@ struct UsageSnapshot: Identifiable, Equatable {
     var weeklyPercentUsed: Double?
     var nextResetAt: Date?
     var subscriptionExpiresAt: Date?
+    var planType: String? = nil
     var usageStatus: UsageStatus
     var sourceConfidence: Double
     var lastSyncedAt: Date?
@@ -51,6 +46,7 @@ extension UsageSnapshot: Codable {
         case id, accountId
         case sessionPercentUsed, weeklyPercentUsed
         case nextResetAt, subscriptionExpiresAt
+        case planType
         case usageStatus, subscriptionStatus
         case sourceConfidence, lastSyncedAt
     }
@@ -63,6 +59,7 @@ extension UsageSnapshot: Codable {
         weeklyPercentUsed    = try c.decodeIfPresent(Double.self,    forKey: .weeklyPercentUsed)
         nextResetAt          = try c.decodeIfPresent(Date.self,      forKey: .nextResetAt)
         subscriptionExpiresAt = try c.decodeIfPresent(Date.self,     forKey: .subscriptionExpiresAt)
+        planType             = try c.decodeIfPresent(String.self,    forKey: .planType)
         usageStatus          = try c.decode(UsageStatus.self,        forKey: .usageStatus)
         _ = try c.decodeIfPresent(SubscriptionDerivedState.self,     forKey: .subscriptionStatus)
         sourceConfidence     = try c.decode(Double.self,             forKey: .sourceConfidence)
@@ -78,6 +75,7 @@ extension UsageSnapshot: Codable {
         try c.encodeIfPresent(weeklyPercentUsed,     forKey: .weeklyPercentUsed)
         try c.encodeIfPresent(nextResetAt,           forKey: .nextResetAt)
         try c.encodeIfPresent(subscriptionExpiresAt, forKey: .subscriptionExpiresAt)
+        try c.encodeIfPresent(planType,              forKey: .planType)
         try c.encode(usageStatus,          forKey: .usageStatus)
         try c.encode(sourceConfidence,     forKey: .sourceConfidence)
         try c.encodeIfPresent(lastSyncedAt,          forKey: .lastSyncedAt)

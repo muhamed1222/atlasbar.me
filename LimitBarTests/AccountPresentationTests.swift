@@ -15,6 +15,7 @@ struct AccountPresentationTests {
             weeklyPercentUsed: 40,
             nextResetAt: nil,
             subscriptionExpiresAt: now.addingTimeInterval(4 * 24 * 60 * 60),
+            planType: "pro",
             usageStatus: .available,
             sourceConfidence: 1,
             lastSyncedAt: now,
@@ -29,8 +30,12 @@ struct AccountPresentationTests {
         )
 
         #expect(presentation.title == "row@example.com")
+        #expect(presentation.planLabel == "Pro")
         #expect(presentation.usageSummary?.text == "S72 W60")
-        #expect(presentation.chips.map(\.text) == ["Codex", "Available", "Expires 16 Jan"])
+        #expect(presentation.chips.map(\.text) == ["Codex", "Available", "Expires Jan 16"])
+        #expect(presentation.statusChip == nil)
+        #expect(presentation.subscriptionChip?.text == "Expires Jan 16")
+        #expect(presentation.resetAccent == nil)
         #expect(presentation.chips.map(\.tone) == [.secondary, .green, .orange])
         #expect(presentation.usageBars == [
             UsageBarPresentation(label: "S", remainingPercent: 72),
@@ -64,8 +69,40 @@ struct AccountPresentationTests {
         )
 
         #expect(presentation.usageSummary?.text == "1h 30m")
-        #expect(presentation.chips.map(\.text) == ["Codex", "Cooling down", "1h 30m"])
-        #expect(presentation.chips.last?.monospaced == true)
+        #expect(presentation.chips.map(\.text) == ["Codex", "Cooling down"])
+        #expect(presentation.resetAccent?.title == "Session reset")
+        #expect(presentation.resetAccent?.countdownText == "Resets in 1h 30m")
+        #expect(presentation.resetAccent?.timeText == "18:16")
+        #expect(presentation.resetAccent?.summaryText == "Session reset at 18:16 (in 1h 30m)")
+    }
+
+    @Test
+    func accountRowPresentationAddsResetAccentWhenResetIsSoon() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Codex", email: "soon@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 74,
+            weeklyPercentUsed: 21,
+            nextResetAt: now.addingTimeInterval(5 * 60 * 60),
+            subscriptionExpiresAt: nil,
+            usageStatus: .available,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.usageSummary?.text == "S26 W79")
+        #expect(presentation.resetAccent?.countdownText == "Resets in 5h")
+        #expect(presentation.resetAccent?.timeText == "21:46")
     }
 
     @Test
@@ -94,7 +131,8 @@ struct AccountPresentationTests {
         )
 
         #expect(presentation.priorityChip?.text == "Backup")
-        #expect(presentation.chips.map(\.text) == ["Codex", "Exhausted", "Expires 1 Feb"])
+        #expect(presentation.chips.map(\.text) == ["Codex", "Exhausted", "Expires Feb 1"])
+        #expect(presentation.resetAccent == nil)
         #expect(presentation.notePreview == "Rotate after reset")
     }
 
@@ -108,7 +146,7 @@ struct AccountPresentationTests {
             accountId: account.id,
             sessionPercentUsed: nil,
             weeklyPercentUsed: nil,
-            nextResetAt: nil,
+            nextResetAt: now.addingTimeInterval(12 * 60 * 60),
             subscriptionExpiresAt: now.addingTimeInterval(12 * 60 * 60),
             usageStatus: .available,
             sourceConfidence: 1,
@@ -126,9 +164,12 @@ struct AccountPresentationTests {
         #expect(presentation.title == "detail@example.com")
         #expect(presentation.providerLine == "Provider: Codex")
         #expect(presentation.priorityChip?.text == "Auxiliary")
-        #expect(presentation.summaryChips.map(\.text) == ["Available", "Expires 13 Jan"])
+        #expect(presentation.summaryChips.map(\.text) == ["Available", "Expires Jan 13"])
+        #expect(presentation.resetAccent?.countdownText == "Resets in 12h")
+        #expect(presentation.resetAccent?.timeText == "04:46")
+        #expect(presentation.resetAccent?.summaryText == "Session reset at 04:46 (in 12h)")
         #expect(presentation.identityRows.map(\.title) == ["Account", "Provider", "Subscription", "Last sync"])
-        #expect(Array(presentation.identityRows.map(\.value).prefix(3)) == ["detail@example.com", "Codex", "Expires 13 Jan"])
+        #expect(Array(presentation.identityRows.map(\.value).prefix(3)) == ["detail@example.com", "Codex", "Expires Jan 13"])
         #expect(presentation.noteFooter == "Optional note for renewal context, handoff, or reminders")
         #expect(presentation.noteCharacterCount == "0 characters")
     }
