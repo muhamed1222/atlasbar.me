@@ -122,5 +122,5 @@ final class NotificationManager: NotificationScheduling {
     }
 }
 
-extension UNUserNotificationCenter: @unchecked Sendable {}
+extension UNUserNotificationCenter: @retroactive @unchecked Sendable {}
 extension UNUserNotificationCenter: UserNotificationCentering {}

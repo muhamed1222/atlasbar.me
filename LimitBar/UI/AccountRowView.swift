@@ -96,7 +96,7 @@ struct AccountRowView: View {
     }
 
     private var summaryLine: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             if let statusChip = presentation.statusChip {
                 chip(statusChip, softened: presentation.resetAccent != nil)
             }
@@ -108,7 +108,7 @@ struct AccountRowView: View {
     }
 
     private var metricsLine: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
             if let sessionUsage {
                 usageDialCard(
                     title: strings.session,
@@ -117,16 +117,20 @@ struct AccountRowView: View {
                 )
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                if let weeklyUsage {
-                    weeklyStatRow(weeklyUsage)
-                }
+            if let weeklyUsage {
+                usageDialCard(
+                    title: strings.weekly,
+                    remainingPercent: weeklyUsage.remainingPercent,
+                    tone: barColor(forRemaining: Double(weeklyUsage.remainingPercent))
+                )
+            }
 
+            VStack(alignment: .leading, spacing: 4) {
                 infoStrip
 
                 if let syncText = presentation.syncText {
                     Text(syncText)
-                        .font(.caption2)
+                        .font(.system(size: 9.5, weight: .medium))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
@@ -211,41 +215,26 @@ struct AccountRowView: View {
     }
 
     private func usageDialCard(title: String, remainingPercent: Int, tone: Color) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 3) {
             UsageDialView(
                 remainingPercent: remainingPercent,
                 tone: tone
             )
-            .frame(width: 46, height: 46)
+            .frame(width: 40, height: 40)
 
             Text(title)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .frame(width: 62)
-        .frame(minHeight: 62)
-    }
-
-    private func weeklyStatRow(_ usage: UsageBarPresentation) -> some View {
-        HStack(spacing: 8) {
-            Text(strings.weekly)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 0)
-
-            Text("\(usage.remainingPercent)%")
-                .font(.system(size: 14, weight: .semibold).monospacedDigit())
-                .foregroundStyle(barColor(forRemaining: Double(usage.remainingPercent)))
-        }
-        .padding(.top, 1)
+        .frame(width: 54)
+        .frame(minHeight: 54)
     }
 
     private func resetStrip(_ accent: ResetAccentPresentation) -> some View {
         HStack(spacing: 8) {
             Text(accent.countdownText)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(.orange)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -253,37 +242,42 @@ struct AccountRowView: View {
             Spacer(minLength: 0)
 
             Text(accent.timeText)
-                .font(.system(size: 9.5, weight: .semibold).monospacedDigit())
+                .font(.system(size: 9, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3.5)
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color.orange.opacity(0.05))
+                .fill(Color.orange.opacity(0.04))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(Color.orange.opacity(0.1), lineWidth: 1)
+                .stroke(Color.orange.opacity(0.08), lineWidth: 1)
         )
     }
 
     private func summaryStrip(title: String, value: String, tone: Color) -> some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: 0)
 
             Text(value)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(tone)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .padding(.top, 1)
+        .padding(.horizontal, 1)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.primary.opacity(0.028))
+        )
     }
 
     private func barColor(forRemaining percent: Double) -> Color {
@@ -310,10 +304,10 @@ private struct UsageDialView: View {
 
             VStack(spacing: 1) {
                 Text("\(remainingPercent)")
-                    .font(.system(size: 15, weight: .bold).monospacedDigit())
+                    .font(.system(size: 13.5, weight: .bold).monospacedDigit())
                     .foregroundStyle(.primary)
                 Text("%")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 8, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
         }

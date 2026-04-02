@@ -10,6 +10,24 @@ private struct FakeAuthReader: CodexAuthReading {
     }
 }
 
+private final class SequencedAuthReader: @unchecked Sendable, CodexAuthReading {
+    private let values: [CodexAccountInfo?]
+    private var index = 0
+
+    init(_ values: [CodexAccountInfo?]) {
+        self.values = values
+    }
+
+    func readAccountInfo() -> CodexAccountInfo? {
+        defer {
+            if index < values.count - 1 {
+                index += 1
+            }
+        }
+        return values[min(index, values.count - 1)]
+    }
+}
+
 private struct FakeUsageFetcher: CodexUsageFetching {
     let result: CodexUsageData?
 
@@ -116,6 +134,14 @@ private func makeJWT(expiration: TimeInterval) -> String {
     let header = try! JSONSerialization.data(withJSONObject: ["alg": "none", "typ": "JWT"])
     let payload = try! JSONSerialization.data(withJSONObject: ["exp": expiration])
     return "\(base64URLString(from: header)).\(base64URLString(from: payload)).signature"
+}
+
+private func makeJWT(expiration: TimeInterval, payloadExtras: [String: Any]) -> String {
+    let header = try! JSONSerialization.data(withJSONObject: ["alg": "none", "typ": "JWT"])
+    var payload = payloadExtras
+    payload["exp"] = expiration
+    let payloadData = try! JSONSerialization.data(withJSONObject: payload)
+    return "\(base64URLString(from: header)).\(base64URLString(from: payloadData)).signature"
 }
 
 private func makeAuthJSONData(accessToken: String, refreshToken: String) throws -> Data {
@@ -548,6 +574,39 @@ struct AppModelTests {
     }
 
     @Test
+    func apiBasedProviderRereadsAuthMetadataAfterUsageFetch() async {
+        let staleAuthInfo = CodexAccountInfo(
+            email: "user@example.com",
+            planType: "free",
+            subscriptionExpiresAt: nil,
+            accountId: "acc_123",
+            userId: "user_123"
+        )
+        let refreshedAuthInfo = CodexAccountInfo(
+            email: "user@example.com",
+            planType: "plus",
+            subscriptionExpiresAt: Date(timeIntervalSince1970: 1_700_000_000),
+            accountId: "acc_123",
+            userId: "user_123"
+        )
+        let usageData = CodexUsageData(
+            sessionPercentUsed: 84,
+            weeklyPercentUsed: 52,
+            nextResetAt: Date(timeIntervalSince1970: 1_700_000_600),
+            status: .coolingDown
+        )
+        let provider = APIBasedUsageProvider(
+            authReader: SequencedAuthReader([staleAuthInfo, refreshedAuthInfo]),
+            usageFetcher: FakeUsageFetcher(result: usageData)
+        )
+
+        let result = await provider.fetchCurrentUsage()
+
+        #expect(result?.planType == "plus")
+        #expect(result?.subscriptionExpiresAt == refreshedAuthInfo.subscriptionExpiresAt)
+    }
+
+    @Test
     func codexUsageApiUsesTokenProviderAndUsageClient() async {
         let usageClient = RecordingUsageClient(
             result: CodexUsageData(
@@ -663,6 +722,67 @@ struct AppModelTests {
             writeAuthData: { _ in
                 tracker.record()
                 throw persistenceError
+            },
+            sendRefreshRequest: { _ in
+                let responseBody = try JSONSerialization.data(
+                    withJSONObject: [
+                        "access_token": refreshedToken,
+                        "refresh_token": "refresh-456",
+                        "id_token": "id-456"
+                    ]
+                )
+                let response = HTTPURLResponse(
+                    url: URL(string: "https://auth.openai.com/oauth/token")!,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: nil
+                )!
+                return (responseBody, response)
+            }
+        )
+
+        let token = await provider.currentAccessToken()
+
+        #expect(token == refreshedToken)
+        #expect(tracker.count == 1)
+    }
+
+    @Test
+    func codexAccessTokenProviderRefreshesWhenIdTokenIsExpiredEvenIfAccessTokenIsStillValid() async throws {
+        let validAccessToken = makeJWT(
+            expiration: Date().addingTimeInterval(10 * 24 * 3600).timeIntervalSince1970,
+            payloadExtras: [
+                "https://api.openai.com/auth": [
+                    "chatgpt_plan_type": "free"
+                ]
+            ]
+        )
+        let expiredIdToken = makeJWT(
+            expiration: Date().addingTimeInterval(-3600).timeIntervalSince1970,
+            payloadExtras: [
+                "email": "user@example.com",
+                "https://api.openai.com/auth": [
+                    "chatgpt_plan_type": "free"
+                ]
+            ]
+        )
+        let refreshedToken = makeJWT(expiration: Date().addingTimeInterval(3600).timeIntervalSince1970)
+        let authData = try JSONSerialization.data(
+            withJSONObject: [
+                "tokens": [
+                    "access_token": validAccessToken,
+                    "refresh_token": "refresh-123",
+                    "id_token": expiredIdToken
+                ]
+            ],
+            options: .prettyPrinted
+        )
+        let tracker = WriteTracker()
+
+        let provider = CodexAccessTokenProvider(
+            loadAuthData: { authData },
+            writeAuthData: { _ in
+                tracker.record()
             },
             sendRefreshRequest: { _ in
                 let responseBody = try JSONSerialization.data(

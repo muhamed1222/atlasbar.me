@@ -31,14 +31,16 @@ struct CodexAccessTokenProvider {
     }
 
     func currentAccessToken() async -> String? {
-        guard var token = readAccessToken() else {
+        guard let tokens = readTokens() else {
             tokenLogger.debug("No access_token in auth.json")
             return nil
         }
 
-        if isTokenExpired(token) {
+        var token = tokens.accessToken
+
+        if isTokenExpired(token) || isMetadataTokenStale(tokens.idToken) {
             guard let refreshed = await refreshToken() else {
-                tokenLogger.warning("Token expired and refresh failed")
+                tokenLogger.warning("Token refresh needed for access or metadata, but refresh failed")
                 return nil
             }
             token = refreshed
@@ -47,10 +49,11 @@ struct CodexAccessTokenProvider {
         return token
     }
 
-    private func readAccessToken() -> String? {
+    private func readTokens() -> (accessToken: String, idToken: String?)? {
         guard let json = loadAuthJSON(),
-              let tokens = json["tokens"] as? [String: Any] else { return nil }
-        return tokens["access_token"] as? String
+              let tokens = json["tokens"] as? [String: Any],
+              let accessToken = tokens["access_token"] as? String else { return nil }
+        return (accessToken: accessToken, idToken: tokens["id_token"] as? String)
     }
 
     private func loadAuthJSON() -> [String: Any]? {
@@ -75,6 +78,13 @@ struct CodexAccessTokenProvider {
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let exp = payload["exp"] as? TimeInterval else { return true }
         return Date(timeIntervalSince1970: exp).timeIntervalSinceNow < 300
+    }
+
+    private func isMetadataTokenStale(_ idToken: String?) -> Bool {
+        guard let idToken else {
+            return false
+        }
+        return isTokenExpired(idToken)
     }
 
     private func refreshToken() async -> String? {

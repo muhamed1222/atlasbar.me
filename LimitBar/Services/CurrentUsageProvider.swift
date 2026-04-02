@@ -21,16 +21,17 @@ struct APIBasedUsageProvider: CurrentUsageProviding {
     }
 
     func fetchCurrentUsage() async -> CurrentUsagePayload? {
-        guard let authInfo = authReader.readAccountInfo() else {
+        guard let initialAuthInfo = authReader.readAccountInfo() else {
             return nil
         }
 
-        let usageData = await usageFetcher.fetchUsage(authInfo: authInfo)
+        let usageData = await usageFetcher.fetchUsage(authInfo: initialAuthInfo)
+        let refreshedAuthInfo = authReader.readAccountInfo() ?? initialAuthInfo
 
         return CurrentUsagePayload(
-            accountIdentifier: authInfo.email,
-            planType: authInfo.planType,
-            subscriptionExpiresAt: authInfo.subscriptionExpiresAt,
+            accountIdentifier: refreshedAuthInfo.email ?? initialAuthInfo.email,
+            planType: refreshedAuthInfo.planType,
+            subscriptionExpiresAt: refreshedAuthInfo.subscriptionExpiresAt,
             sessionPercentUsed: usageData?.sessionPercentUsed,
             weeklyPercentUsed: usageData?.weeklyPercentUsed,
             nextResetAt: usageData?.nextResetAt,
