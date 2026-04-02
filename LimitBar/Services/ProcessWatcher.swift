@@ -1,5 +1,9 @@
 import AppKit
 
+protocol CodexRunningChecking {
+    var isCodexRunning: Bool { get }
+}
+
 struct ProcessWatcher {
     func runningCodexApp() -> NSRunningApplication? {
         NSWorkspace.shared.runningApplications.first {
@@ -12,3 +16,5 @@ struct ProcessWatcher {
         runningCodexApp() != nil
     }
 }
+
+extension ProcessWatcher: CodexRunningChecking {}

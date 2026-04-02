@@ -1,5 +1,0 @@
-user@example.com
-Codex
-Daily usage 24%
-Weekly usage 71%
-Plan: Pro

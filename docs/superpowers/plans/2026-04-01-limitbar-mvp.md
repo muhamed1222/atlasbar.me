@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a macOS menu bar MVP that detects Codex, reads visible usage/reset text via Accessibility, stores account snapshots locally, shows account state in the menu bar, and schedules local cooldown notifications.
+> **Status:** this is the original MVP plan kept for historical context. The current implementation path uses `~/.codex/auth.json` + API calls and does not rely on Accessibility or `UsageParser`.
 
-**Architecture:** Use a small SwiftUI menu bar app with a single polling coordinator. Split runtime responsibilities into process detection, accessibility extraction, parsing, persistence, and notification scheduling. Treat Codex as a read-only external provider and store only normalized snapshots plus raw extracted strings for debugging and parser hardening.
+**Goal:** Build a macOS menu bar MVP that detects Codex, reads account and usage state from `~/.codex/auth.json` plus the usage API, stores account snapshots locally, shows account state in the menu bar, and schedules local cooldown notifications.
 
-**Tech Stack:** Swift, SwiftUI, MenuBarExtra, ApplicationServices Accessibility API, UserNotifications, Xcode unit tests
+**Architecture:** Use a small SwiftUI menu bar app with a single polling coordinator. Split runtime responsibilities into process detection, auth lookup, API usage fetching, persistence, and notification scheduling. Treat Codex as a read-only external provider and store normalized snapshots only.
+
+**Tech Stack:** Swift, SwiftUI, MenuBarExtra, UserNotifications, Xcode unit tests
 
 ---
 
@@ -26,10 +28,12 @@
   Snapshot and status models.
 - `LimitBar/Services/ProcessWatcher.swift`
   Codex process/window detection.
-- `LimitBar/Services/AccessibilityReader.swift`
-  Accessibility permission checks and recursive text extraction.
-- `LimitBar/Services/UsageParser.swift`
-  Regex-based extraction and confidence scoring.
+- `LimitBar/Services/CodexAuthReader.swift`
+  Reads the active Codex account from `~/.codex/auth.json`.
+- `LimitBar/Services/CodexUsageClient.swift`
+  Fetches usage data from the Codex/OpenAI usage endpoint.
+- `LimitBar/Services/CurrentUsageProvider.swift`
+  Normalizes auth and API data into the current usage model.
 - `LimitBar/Services/SnapshotStore.swift`
   Local JSON persistence for accounts and snapshots.
 - `LimitBar/Services/NotificationManager.swift`
@@ -44,16 +48,16 @@
   Settings window for polling/notifications/permissions.
 - `LimitBar/Support/DateFormatting.swift`
   Shared date/countdown formatting helpers.
-- `LimitBar/Support/ParserPatterns.swift`
-  Central parser regex/pattern definitions.
-- `LimitBarTests/UsageParserTests.swift`
-  Parser-focused unit tests with raw text fixtures.
+- `LimitBar/App/UsageStateCoordinator.swift`
+  Coordinates polling, refresh timing, and usage normalization.
+- `LimitBar/Domain/CurrentUsage.swift`
+  Current usage payload and status models.
 - `LimitBarTests/AppModelTests.swift`
   Refresh/status transition tests.
 - `LimitBarTests/SnapshotStoreTests.swift`
   Persistence round-trip tests.
-- `LimitBarTests/Fixtures/codex-*.txt`
-  Captured accessibility text samples for realistic parser tests.
+- `LimitBarTests/CurrentUsageProviderTests.swift`
+  Auth and API-backed provider tests.
 
 ## Scope Guardrails
 
@@ -61,7 +65,7 @@
 - OCR fallback is explicitly out of scope.
 - Subscription parsing is out of scope unless a real, stable text sample is captured during spike validation.
 - “Best account suggestion” is out of scope.
-- Multi-provider abstractions stay lightweight: keep one `Provider` model and one `UsageParser` implementation for Codex.
+- Multi-provider abstractions stay lightweight: keep one `Provider` model and one API-backed usage provider for Codex.
 
 ### Task 1: Bootstrap macOS Menu Bar Shell
 
@@ -357,7 +361,9 @@ git add LimitBar LimitBarTests
 git commit -m "feat: add domain models and local snapshot persistence"
 ```
 
-### Task 3: Add Codex Process Detection and Accessibility Text Extraction Spike
+### Task 3: Historical Codex Process Detection and Accessibility Text Extraction Spike
+
+> Legacy reference only. The current architecture does not use Accessibility extraction.
 
 **Files:**
 - Create: `LimitBar/Services/ProcessWatcher.swift`
@@ -528,7 +534,9 @@ git add LimitBar
 git commit -m "feat: add codex accessibility extraction spike"
 ```
 
-### Task 4: Build the Parser and Status Mapping
+### Task 4: Historical Parser and Status Mapping
+
+> Legacy reference only. The current architecture does not use `UsageParser`.
 
 **Files:**
 - Create: `LimitBar/Support/ParserPatterns.swift`
@@ -966,9 +974,9 @@ Verify:
 ```text
 1. Menu bar item launches.
 2. Codex detection works.
-3. Accessibility permission flow works.
-4. Raw text is captured.
-5. Parser maps at least one real state.
+3. auth.json + API flow works.
+4. Account and usage data are loaded.
+5. Provider maps at least one real state.
 6. Snapshot persists across relaunch.
 7. Settings open.
 8. Notification permission can be requested and a test notification can be scheduled.
@@ -986,20 +994,20 @@ git commit -m "feat: add notifications and settings for mvp"
 - [ ] `xcodebuild test -scheme LimitBar -destination 'platform=macOS'`
 - [ ] Manual Codex-open refresh test
 - [ ] Manual Codex-closed idle test
-- [ ] Accessibility permission revoked/regranted test
+- [ ] auth.json refresh test
 - [ ] Relaunch persistence test
 - [ ] Notification smoke test
 
 ## Risks To Revisit During Execution
 
-- Accessibility tree may expose less text than expected; if so, Task 3 becomes a hard product gate.
-- `nextResetAt` parsing is intentionally stubbed in the first parser pass; add real time parsing only after collecting samples.
-- The initial recursive AX traversal may need cycle/size guards if Codex exposes a large tree.
+- `auth.json` may be missing or stale on a given machine; handle that as an unavailable account state.
+- `nextResetAt` parsing is intentionally stubbed in the first provider pass; add real time parsing only after confirming API payload shape.
+- API latency or rate limiting may require backoff in the polling coordinator.
 - Settings opening with `showSettingsWindow:` may require a more explicit app settings presenter depending on target macOS version.
 
 ## Recommendation After Task 3
 
-If Task 3 shows weak accessibility coverage, pause before Task 4 and re-scope the product around:
+If Task 3 shows weak auth/API coverage, pause before Task 4 and re-scope the product around:
 - raw status visibility only;
 - manual account labeling;
 - no automatic email extraction guarantee.

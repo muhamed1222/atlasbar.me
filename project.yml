@@ -29,7 +29,6 @@ targets:
         CFBundleShortVersionString: "0.1.0"
         LSUIElement: YES
         NSPrincipalClass: NSApplication
-        NSAccessibilityUsageDescription: "LimitBar needs Accessibility access to read usage data from Codex."
         NSUserNotificationUsageDescription: "LimitBar sends notifications when your Codex cooldown ends."
     settings:
       base:

@@ -22,8 +22,6 @@
 	<string>1</string>
 	<key>LSUIElement</key>
 	<true/>
-	<key>NSAccessibilityUsageDescription</key>
-	<string>LimitBar needs Accessibility access to read usage data from Codex.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSUserNotificationUsageDescription</key>

@@ -2,7 +2,20 @@ import SwiftUI
 
 @main
 struct LimitBarApp: App {
-    @StateObject private var appModel = AppModel()
+    private let notificationManager: NotificationManager
+    @StateObject private var appModel: AppModel
+
+    init() {
+        let notificationManager = NotificationManager()
+        self.notificationManager = notificationManager
+        _appModel = StateObject(
+            wrappedValue: AppModel(notificationManager: notificationManager)
+        )
+
+        Task {
+            _ = await notificationManager.requestAuthorization()
+        }
+    }
 
     var body: some Scene {
         MenuBarExtra {

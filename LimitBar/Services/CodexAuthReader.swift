@@ -3,12 +3,16 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.atlasbar.LimitBar", category: "CodexAuthReader")
 
-struct CodexAccountInfo: Equatable {
+struct CodexAccountInfo: Equatable, Sendable {
     var email: String?
     var planType: String?
     var subscriptionExpiresAt: Date?
     var accountId: String?
     var userId: String?
+}
+
+protocol CodexAuthReading: Sendable {
+    func readAccountInfo() -> CodexAccountInfo?
 }
 
 struct CodexAuthReader {
@@ -77,3 +81,5 @@ struct CodexAuthReader {
             ?? ISO8601DateFormatter().date(from: string)
     }
 }
+
+extension CodexAuthReader: CodexAuthReading {}

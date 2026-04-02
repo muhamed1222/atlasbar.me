@@ -16,6 +16,9 @@ func countdownString(until date: Date, now: Date = .now) -> String {
 }
 
 func shortUsageLabel(snapshot: UsageSnapshot) -> String {
+    if snapshot.usageStatus == .stale {
+        return UsageStatus.stale.displayLabel
+    }
     if let nextResetAt = snapshot.nextResetAt, snapshot.usageStatus == .coolingDown {
         return countdownString(until: nextResetAt)
     }
@@ -29,6 +32,23 @@ func shortUsageLabel(snapshot: UsageSnapshot) -> String {
     case .available:   return "OK"
     case .exhausted:   return "X"
     case .coolingDown: return "~"
-    case .stale, .unknown: return "--"
+    case .unknown:     return "--"
+    case .stale:       return UsageStatus.stale.displayLabel
     }
+}
+
+func staleUsageLabel(hasSnapshots: Bool) -> String {
+    hasSnapshots ? UsageStatus.stale.displayLabel : "Offline"
+}
+
+func freshnessLabel(for snapshot: UsageSnapshot) -> String? {
+    if snapshot.usageStatus == .stale {
+        if let lastSyncedAt = snapshot.lastSyncedAt {
+            return "Stale · Synced \(lastSyncedAt.formatted(.relative(presentation: .named)))"
+        }
+        return UsageStatus.stale.displayLabel
+    }
+
+    guard let lastSyncedAt = snapshot.lastSyncedAt else { return nil }
+    return "Synced \(lastSyncedAt.formatted(.relative(presentation: .named)))"
 }

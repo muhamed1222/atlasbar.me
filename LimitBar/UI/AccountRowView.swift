@@ -44,8 +44,8 @@ struct AccountRowView: View {
                     }
                 }
 
-                if let lastSync = snapshot.lastSyncedAt {
-                    Text("Synced \(lastSync.formatted(.relative(presentation: .named)))")
+                if let freshness = freshnessLabel(for: snapshot) {
+                    Text(freshness)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }

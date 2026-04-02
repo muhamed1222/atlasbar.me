@@ -6,6 +6,7 @@ macOS menu bar app for tracking Codex usage across accounts.
 
 - reads the current Codex account from `~/.codex/auth.json`
 - fetches usage data from the Codex/OpenAI usage endpoint
+- uses the `auth.json + API` path only; no Accessibility or UsageParser fallback
 - shows `Session` and `Weekly` remaining limits in the menu bar
 - keeps local snapshots and basic account state
 
@@ -15,6 +16,7 @@ macOS menu bar app for tracking Codex usage across accounts.
 - Xcode 16 or newer
 - Codex app installed
 - logged-in Codex account on the same Mac
+- no Accessibility permission is required for the current data path
 
 ## Run On Another Mac
 

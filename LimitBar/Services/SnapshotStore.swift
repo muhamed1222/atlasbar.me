@@ -5,6 +5,12 @@ struct PersistedState: Codable, Equatable {
     var snapshots: [UsageSnapshot]
 }
 
+protocol SnapshotStoring: AnyObject {
+    func load() -> PersistedState
+    func save(_ state: PersistedState) throws
+    func reset() throws
+}
+
 final class SnapshotStore {
     private let url: URL
     private let encoder: JSONEncoder
@@ -61,3 +67,5 @@ final class SnapshotStore {
         try save(PersistedState(accounts: [], snapshots: []))
     }
 }
+
+extension SnapshotStore: SnapshotStoring {}
