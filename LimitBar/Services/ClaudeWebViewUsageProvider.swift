@@ -1,0 +1,45 @@
+import Foundation
+
+struct ClaudeWebViewUsageProvider: CurrentUsageProviding {
+    private let credentialsReader: any ClaudeCredentialsReading
+    private let sessionController: ClaudeWebSessionController
+    private let fallbackWebProvider: (any CurrentUsageProviding)?
+
+    init(
+        credentialsReader: any ClaudeCredentialsReading = ClaudeKeychainReader(),
+        sessionController: ClaudeWebSessionController,
+        fallbackWebProvider: (any CurrentUsageProviding)? = nil
+    ) {
+        self.credentialsReader = credentialsReader
+        self.sessionController = sessionController
+        self.fallbackWebProvider = fallbackWebProvider
+    }
+
+    func fetchCurrentUsage() async -> CurrentUsagePayload? {
+        guard let credentials = credentialsReader.readCredentials() else {
+            return await fallbackWebProvider?.fetchCurrentUsage()
+        }
+
+        if let result = await sessionController.fetchUsageResponse(organizationUUID: credentials.organizationUUID),
+           result.organizationUUID == credentials.organizationUUID,
+           (200...299).contains(result.status),
+           let payload = decodeUsagePayload(from: result.body) {
+            return CurrentUsagePayload(
+                accountIdentifier: credentials.accountIdentifier,
+                planType: credentials.subscriptionType,
+                subscriptionExpiresAt: nil,
+                sessionPercentUsed: payload.fiveHour?.percentUsed,
+                weeklyPercentUsed: payload.sevenDay?.percentUsed,
+                nextResetAt: payload.fiveHour?.resetAt ?? payload.sevenDay?.resetAt,
+                usageStatus: payload.usageStatus,
+                sourceConfidence: 0.98,
+                rawExtractedStrings: [],
+                provider: "Claude",
+                totalTokensToday: nil,
+                totalTokensThisWeek: nil
+            )
+        }
+
+        return await fallbackWebProvider?.fetchCurrentUsage()
+    }
+}

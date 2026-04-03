@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import WebKit
 @testable import LimitBar
 
 private struct FakeAuthReader: CodexAuthReading {
@@ -67,6 +68,62 @@ private struct FakeCurrentUsageProvider: CurrentUsageProviding {
 
     func fetchCurrentUsage() async -> CurrentUsagePayload? {
         result
+    }
+}
+
+private struct AppModelFakeClaudeCredentialsReader: ClaudeCredentialsReading {
+    let credentials: ClaudeCredentials?
+
+    func readCredentials() -> ClaudeCredentials? {
+        credentials
+    }
+}
+
+private final class InMemoryClaudeCookieStore: @unchecked Sendable, ClaudeSessionCookieStoring {
+    private(set) var cookie: String?
+
+    func hasStoredCookie() -> Bool {
+        cookie?.isEmpty == false
+    }
+
+    func cookieHeaderValue() -> String? {
+        cookie
+    }
+
+    func saveCookie(_ rawValue: String) throws {
+        cookie = rawValue
+    }
+
+    func clearCookie() throws {
+        cookie = nil
+    }
+}
+
+@MainActor
+private final class FakeClaudeWebSessionController: ClaudeWebSessionControlling {
+    var webView: WKWebView {
+        WKWebView(frame: .zero)
+    }
+
+    var preparedLoginPage = false
+    var resultByOrganization: [String: ClaudeWebFetchResult] = [:]
+
+    func prepareLoginPage() {
+        preparedLoginPage = true
+    }
+
+    func clearSession() async throws {
+        resultByOrganization.removeAll()
+    }
+
+    func fetchUsageResponse(organizationUUID: String?) async -> ClaudeWebFetchResult? {
+        guard let organizationUUID else { return nil }
+        return resultByOrganization[organizationUUID]
+    }
+
+    func cachedUsageResponse(organizationUUID: String?) -> ClaudeWebFetchResult? {
+        guard let organizationUUID else { return nil }
+        return resultByOrganization[organizationUUID]
     }
 }
 
@@ -253,6 +310,177 @@ struct AppModelTests {
         #expect(model.accountMetadata.isEmpty)
         #expect(model.settings == .default)
         #expect(model.compactLabel == "--")
+    }
+
+    @Test
+    func refreshKeepsCodexAndClaudeAccountsSeparateWhenIdentifiersMatch() async {
+        let sharedEmail = "same@example.com"
+        let codexPayload = CurrentUsagePayload(
+            accountIdentifier: sharedEmail,
+            planType: "plus",
+            subscriptionExpiresAt: nil,
+            sessionPercentUsed: 10,
+            weeklyPercentUsed: 20,
+            nextResetAt: nil,
+            usageStatus: .available,
+            sourceConfidence: 1.0,
+            rawExtractedStrings: [],
+            provider: Provider.codex.name
+        )
+        let claudePayload = CurrentUsagePayload(
+            accountIdentifier: sharedEmail,
+            planType: nil,
+            subscriptionExpiresAt: nil,
+            sessionPercentUsed: nil,
+            weeklyPercentUsed: nil,
+            nextResetAt: nil,
+            usageStatus: .available,
+            sourceConfidence: 1.0,
+            rawExtractedStrings: [],
+            provider: Provider.claude.name,
+            totalTokensToday: 1200,
+            totalTokensThisWeek: 8400
+        )
+        let model = AppModel(
+            usageProvider: FakeCurrentUsageProvider(result: codexPayload),
+            runningChecker: FakeRunningChecker(isCodexRunning: false),
+            store: InMemorySnapshotStore(),
+            claudeUsageProvider: FakeCurrentUsageProvider(result: claudePayload),
+            shouldStartPolling: false
+        )
+
+        await model.refreshNowAsync()
+
+        #expect(model.accounts.count == 2)
+        #expect(Set(model.accounts.map(\.provider)) == Set([Provider.codex.name, Provider.claude.name]))
+        #expect(Set(model.snapshots.map(\.accountId)).count == 2)
+    }
+
+    @Test
+    func refreshMigratesLegacyClaudePlaceholderToEmailIdentity() async {
+        let legacyClaude = Account(
+            id: UUID(),
+            provider: Provider.claude.name,
+            email: nil,
+            label: "Claude Pro"
+        )
+        let legacySnapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: legacyClaude.id,
+            sessionPercentUsed: nil,
+            weeklyPercentUsed: nil,
+            nextResetAt: nil,
+            subscriptionExpiresAt: nil,
+            planType: "pro",
+            usageStatus: .available,
+            sourceConfidence: 1.0,
+            lastSyncedAt: Date(timeIntervalSince1970: 10),
+            rawExtractedStrings: [],
+            totalTokensToday: 111,
+            totalTokensThisWeek: 999
+        )
+        let store = InMemorySnapshotStore(
+            state: PersistedState(accounts: [legacyClaude], snapshots: [legacySnapshot])
+        )
+        let claudePayload = CurrentUsagePayload(
+            accountIdentifier: "outcastsdev@gmail.com",
+            planType: "pro",
+            subscriptionExpiresAt: nil,
+            sessionPercentUsed: nil,
+            weeklyPercentUsed: nil,
+            nextResetAt: nil,
+            usageStatus: .available,
+            sourceConfidence: 1.0,
+            rawExtractedStrings: [],
+            provider: Provider.claude.name,
+            totalTokensToday: 1200,
+            totalTokensThisWeek: 8400
+        )
+
+        let model = AppModel(
+            usageProvider: FakeCurrentUsageProvider(result: nil),
+            runningChecker: FakeRunningChecker(isCodexRunning: false),
+            store: store,
+            claudeUsageProvider: FakeCurrentUsageProvider(result: claudePayload),
+            shouldStartPolling: false
+        )
+
+        await model.refreshNowAsync()
+
+        #expect(model.accounts.count == 1)
+        #expect(model.accounts.first?.email == "outcastsdev@gmail.com")
+        #expect(model.accounts.first?.label == nil)
+        #expect(model.snapshots.count == 1)
+        #expect(model.snapshots.first?.accountId == legacyClaude.id)
+    }
+
+    @Test
+    func initDropsLegacyClaudePlaceholderWhenEmailAccountAlreadyExists() {
+        let legacyClaude = Account(
+            id: UUID(),
+            provider: Provider.claude.name,
+            email: nil,
+            label: "Claude Pro"
+        )
+        let emailClaude = Account(
+            id: UUID(),
+            provider: Provider.claude.name,
+            email: "outcastsdev@gmail.com",
+            label: nil
+        )
+        let store = InMemorySnapshotStore(
+            state: PersistedState(
+                accounts: [legacyClaude, emailClaude],
+                snapshots: [
+                    UsageSnapshot(
+                        id: UUID(),
+                        accountId: legacyClaude.id,
+                        sessionPercentUsed: nil,
+                        weeklyPercentUsed: nil,
+                        nextResetAt: nil,
+                        subscriptionExpiresAt: nil,
+                        planType: "pro",
+                        usageStatus: .available,
+                        sourceConfidence: 1.0,
+                        lastSyncedAt: Date(),
+                        rawExtractedStrings: [],
+                        totalTokensToday: 10,
+                        totalTokensThisWeek: 20
+                    ),
+                    UsageSnapshot(
+                        id: UUID(),
+                        accountId: emailClaude.id,
+                        sessionPercentUsed: nil,
+                        weeklyPercentUsed: nil,
+                        nextResetAt: nil,
+                        subscriptionExpiresAt: nil,
+                        planType: "pro",
+                        usageStatus: .available,
+                        sourceConfidence: 1.0,
+                        lastSyncedAt: Date(),
+                        rawExtractedStrings: [],
+                        totalTokensToday: 10,
+                        totalTokensThisWeek: 20
+                    )
+                ]
+            )
+        )
+
+        let model = AppModel(
+            runningChecker: FakeRunningChecker(isCodexRunning: false),
+            store: store,
+            shouldStartPolling: false
+        )
+
+        #expect(model.accounts.count == 1)
+        #expect(model.accounts.first?.email == "outcastsdev@gmail.com")
+        #expect(model.snapshots.count == 1)
+        #expect(model.snapshots.first?.accountId == emailClaude.id)
+        let persisted = store.load()
+        #expect(persisted.accounts.count == 1)
+        #expect(persisted.accounts.first?.email == "outcastsdev@gmail.com")
+        #expect(persisted.snapshots.count == 1)
+        #expect(persisted.snapshots.first?.accountId == emailClaude.id)
     }
 
     @Test
@@ -1030,6 +1258,241 @@ struct AppModelTests {
         #expect(result.compactLabel == "--")
         #expect(store.load().accounts.isEmpty)
         #expect(store.load().snapshots.isEmpty)
+    }
+
+    @Test
+    func appModelTracksClaudeCookieConfiguration() {
+        let cookieStore = InMemoryClaudeCookieStore()
+        let model = AppModel(
+            store: InMemorySnapshotStore(),
+            claudeSessionCookieStore: cookieStore,
+            shouldStartPolling: false
+        )
+
+        #expect(model.claudeCookieConfigured == false)
+        #expect(model.saveClaudeSessionCookie("sessionKey=test-cookie") == true)
+        #expect(model.claudeCookieConfigured == true)
+
+        model.clearClaudeSessionCookie()
+
+        #expect(model.claudeCookieConfigured == false)
+        #expect(cookieStore.cookieHeaderValue() == nil)
+    }
+
+    @Test
+    func refreshMarksOnlyClaudeSnapshotsStaleWhenClaudeFetchFails() async throws {
+        let codexAccount = Account(
+            id: UUID(),
+            provider: Provider.codex.name,
+            email: "codex@example.com",
+            label: nil
+        )
+        let claudeAccount = Account(
+            id: UUID(),
+            provider: Provider.claude.name,
+            email: "claude@example.com",
+            label: nil
+        )
+        let store = InMemorySnapshotStore(
+            state: PersistedState(
+                accounts: [codexAccount, claudeAccount],
+                snapshots: [
+                    UsageSnapshot(
+                        id: UUID(),
+                        accountId: codexAccount.id,
+                        sessionPercentUsed: 10,
+                        weeklyPercentUsed: 20,
+                        nextResetAt: nil,
+                        subscriptionExpiresAt: nil,
+                        usageStatus: .available,
+                        sourceConfidence: 1.0,
+                        lastSyncedAt: Date(),
+                        rawExtractedStrings: []
+                    ),
+                    UsageSnapshot(
+                        id: UUID(),
+                        accountId: claudeAccount.id,
+                        sessionPercentUsed: 35,
+                        weeklyPercentUsed: 45,
+                        nextResetAt: nil,
+                        subscriptionExpiresAt: nil,
+                        usageStatus: .available,
+                        sourceConfidence: 1.0,
+                        lastSyncedAt: Date(),
+                        rawExtractedStrings: []
+                    )
+                ]
+            )
+        )
+        let codexPayload = CurrentUsagePayload(
+            accountIdentifier: "codex@example.com",
+            planType: "plus",
+            subscriptionExpiresAt: nil,
+            sessionPercentUsed: 15,
+            weeklyPercentUsed: 25,
+            nextResetAt: nil,
+            usageStatus: .available,
+            sourceConfidence: 1.0,
+            rawExtractedStrings: [],
+            provider: Provider.codex.name
+        )
+        let model = AppModel(
+            usageProvider: FakeCurrentUsageProvider(result: codexPayload),
+            runningChecker: FakeRunningChecker(isCodexRunning: false),
+            store: store,
+            claudeUsageProvider: FakeCurrentUsageProvider(result: nil),
+            shouldStartPolling: false
+        )
+
+        await model.refreshNowAsync()
+
+        let codexSnapshot = model.snapshots.first { $0.accountId == codexAccount.id }
+        let claudeSnapshot = model.snapshots.first { $0.accountId == claudeAccount.id }
+        #expect(codexSnapshot?.usageStatus == .available)
+        #expect(claudeSnapshot?.usageStatus == .stale)
+    }
+
+    @Test
+    func claudeWebSessionStatusRequiresQuotaForCurrentOrganization() async {
+        let controller = FakeClaudeWebSessionController()
+        controller.resultByOrganization["org-123"] = ClaudeWebFetchResult(
+            status: 200,
+            body: """
+            {
+              "five_hour": {
+                "remaining_percent": 71,
+                "reset_at": "2026-04-03T10:00:00Z"
+              },
+              "seven_day": {
+                "remaining_percent": 43,
+                "reset_at": "2026-04-05T10:00:00Z"
+              }
+            }
+            """,
+            url: "https://claude.ai/settings/usage",
+            organizationUUID: "org-123"
+        )
+
+        let model = AppModel(
+            store: InMemorySnapshotStore(),
+            claudeCredentialsReader: AppModelFakeClaudeCredentialsReader(
+                credentials: ClaudeCredentials(
+                    subscriptionType: "pro",
+                    accountIdentifier: "outcastsdev@gmail.com",
+                    organizationUUID: "org-123"
+                )
+            ),
+            claudeWebSessionController: controller,
+            shouldStartPolling: false
+        )
+
+        await model.refreshClaudeWebSessionStatus()
+
+        #expect(model.claudeWebSessionConnected == true)
+        #expect(model.claudeWebSessionErrorMessage == nil)
+    }
+
+    @Test
+    func claudeWebSessionStatusStaysDisconnectedForDifferentOrganization() async {
+        let controller = FakeClaudeWebSessionController()
+        controller.resultByOrganization["org-999"] = ClaudeWebFetchResult(
+            status: 200,
+            body: """
+            {
+              "five_hour": {
+                "remaining_percent": 50,
+                "reset_at": "2026-04-03T10:00:00Z"
+              }
+            }
+            """,
+            url: "https://claude.ai/settings/usage",
+            organizationUUID: "org-999"
+        )
+
+        let model = AppModel(
+            store: InMemorySnapshotStore(),
+            claudeCredentialsReader: AppModelFakeClaudeCredentialsReader(
+                credentials: ClaudeCredentials(
+                    subscriptionType: "pro",
+                    accountIdentifier: "outcastsdev@gmail.com",
+                    organizationUUID: "org-123"
+                )
+            ),
+            claudeWebSessionController: controller,
+            shouldStartPolling: false
+        )
+
+        await model.refreshClaudeWebSessionStatus()
+
+        #expect(model.claudeWebSessionConnected == false)
+    }
+
+    @Test
+    func clearClaudeWebSessionDropsCachedConnectedState() async {
+        let controller = FakeClaudeWebSessionController()
+        controller.resultByOrganization["org-123"] = ClaudeWebFetchResult(
+            status: 200,
+            body: """
+            {
+              "five_hour": {
+                "remaining_percent": 71,
+                "reset_at": "2026-04-03T10:00:00Z"
+              }
+            }
+            """,
+            url: "https://claude.ai/settings/usage",
+            organizationUUID: "org-123"
+        )
+
+        let model = AppModel(
+            usageProvider: FakeCurrentUsageProvider(result: nil),
+            runningChecker: FakeRunningChecker(isCodexRunning: false),
+            store: InMemorySnapshotStore(),
+            claudeUsageProvider: FakeCurrentUsageProvider(result: nil),
+            claudeCredentialsReader: AppModelFakeClaudeCredentialsReader(
+                credentials: ClaudeCredentials(
+                    subscriptionType: "pro",
+                    accountIdentifier: "outcastsdev@gmail.com",
+                    organizationUUID: "org-123"
+                )
+            ),
+            claudeWebSessionController: controller,
+            shouldStartPolling: false
+        )
+
+        await model.refreshClaudeWebSessionStatus()
+        #expect(model.claudeWebSessionConnected == true)
+
+        model.clearClaudeWebSession()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        #expect(controller.cachedUsageResponse(organizationUUID: "org-123") == nil)
+        #expect(model.claudeWebSessionConnected == false)
+    }
+
+    @Test
+    func isActiveCodexAccountIgnoresNonCodexProviders() {
+        let model = AppModel(
+            store: InMemorySnapshotStore(),
+            shouldStartPolling: false
+        )
+        model.activeCodexEmail = "shared@example.com"
+
+        let claudeAccount = Account(
+            id: UUID(),
+            provider: Provider.claude.name,
+            email: "shared@example.com",
+            label: nil
+        )
+        let codexAccount = Account(
+            id: UUID(),
+            provider: Provider.codex.name,
+            email: "shared@example.com",
+            label: nil
+        )
+
+        #expect(model.isActiveCodexAccount(claudeAccount) == false)
+        #expect(model.isActiveCodexAccount(codexAccount) == true)
     }
 
 }

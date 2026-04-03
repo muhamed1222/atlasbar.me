@@ -17,12 +17,26 @@ struct CurrentUsagePayload: Equatable, Sendable {
     var usageStatus: UsageStatus
     var sourceConfidence: Double
     var rawExtractedStrings: [String]
+    var provider: String = "Codex"
+    var totalTokensToday: Int? = nil
+    var totalTokensThisWeek: Int? = nil
 
     var hasUsageData: Bool {
         sessionPercentUsed != nil
             || weeklyPercentUsed != nil
             || nextResetAt != nil
             || usageStatus != .unknown
+    }
+
+    var normalizedAccountIdentifier: String? {
+        let raw = accountIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let raw, !raw.isEmpty else { return nil }
+        return raw.lowercased()
+    }
+
+    var identityKey: String {
+        let providerKey = provider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return "\(providerKey)::\(normalizedAccountIdentifier ?? "__unknown__")"
     }
 
     func mergingMetadata(from primary: CurrentUsagePayload?) -> CurrentUsagePayload {
@@ -36,7 +50,10 @@ struct CurrentUsagePayload: Equatable, Sendable {
             nextResetAt: nextResetAt,
             usageStatus: usageStatus,
             sourceConfidence: sourceConfidence,
-            rawExtractedStrings: rawExtractedStrings
+            rawExtractedStrings: rawExtractedStrings,
+            provider: provider,
+            totalTokensToday: totalTokensToday,
+            totalTokensThisWeek: totalTokensThisWeek
         )
     }
 }

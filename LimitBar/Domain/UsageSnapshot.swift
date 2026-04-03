@@ -37,6 +37,9 @@ struct UsageSnapshot: Identifiable, Equatable {
 
     // Not persisted to disk — kept in memory only for debugging
     var rawExtractedStrings: [String]
+
+    var totalTokensToday: Int? = nil
+    var totalTokensThisWeek: Int? = nil
 }
 
 // MARK: - Codable (rawExtractedStrings intentionally excluded)
@@ -49,6 +52,7 @@ extension UsageSnapshot: Codable {
         case planType
         case usageStatus, subscriptionStatus
         case sourceConfidence, lastSyncedAt
+        case totalTokensToday, totalTokensThisWeek
     }
 
     init(from decoder: Decoder) throws {
@@ -64,6 +68,8 @@ extension UsageSnapshot: Codable {
         _ = try c.decodeIfPresent(SubscriptionDerivedState.self,     forKey: .subscriptionStatus)
         sourceConfidence     = try c.decode(Double.self,             forKey: .sourceConfidence)
         lastSyncedAt         = try c.decodeIfPresent(Date.self,      forKey: .lastSyncedAt)
+        totalTokensToday     = try c.decodeIfPresent(Int.self,       forKey: .totalTokensToday)
+        totalTokensThisWeek  = try c.decodeIfPresent(Int.self,       forKey: .totalTokensThisWeek)
         rawExtractedStrings  = []
     }
 
@@ -79,5 +85,7 @@ extension UsageSnapshot: Codable {
         try c.encode(usageStatus,          forKey: .usageStatus)
         try c.encode(sourceConfidence,     forKey: .sourceConfidence)
         try c.encodeIfPresent(lastSyncedAt,          forKey: .lastSyncedAt)
+        try c.encodeIfPresent(totalTokensToday,      forKey: .totalTokensToday)
+        try c.encodeIfPresent(totalTokensThisWeek,   forKey: .totalTokensThisWeek)
     }
 }

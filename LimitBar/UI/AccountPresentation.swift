@@ -44,6 +44,8 @@ struct AccountRowPresentation: Equatable {
     var usageBars: [UsageBarPresentation]
     var notePreview: String?
     var syncText: String?
+    var totalTokensToday: Int? = nil
+    var totalTokensThisWeek: Int? = nil
 }
 
 struct AccountsListRowPresentation: Equatable {
@@ -131,6 +133,14 @@ func makeAccountRowPresentation(
         strings.synced(localizedRelativeDate($0, language: language, now: now))
     }
 
+    var tokenSyncText: String? = syncText
+    if account.provider == "Claude", let snapshot {
+        if let tokensToday = snapshot.totalTokensToday {
+            let formatted = strings.formattedTokens(tokensToday)
+            tokenSyncText = "\(strings.tokensToday): \(formatted)"
+        }
+    }
+
     return AccountRowPresentation(
         title: account.displayName,
         planLabel: planBadgeText(for: snapshot?.planType),
@@ -141,7 +151,9 @@ func makeAccountRowPresentation(
         resetAccent: resetAccent,
         usageBars: usageBars,
         notePreview: metadata.hasNote ? metadata.trimmedNote : nil,
-        syncText: syncText
+        syncText: tokenSyncText,
+        totalTokensToday: snapshot?.totalTokensToday,
+        totalTokensThisWeek: snapshot?.totalTokensThisWeek
     )
 }
 

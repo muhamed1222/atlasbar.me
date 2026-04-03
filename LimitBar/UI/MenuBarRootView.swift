@@ -94,14 +94,13 @@ struct MenuBarRootView: View {
                                 account: account,
                                 snapshot: snapshot,
                                 metadata: metadata,
+                                isActive: appModel.isActiveCodexAccount(account),
+                                canSwitch: appModel.canSwitch(to: account),
                                 onDelete: { accountPendingDeletion = account },
+                                onSwitch: { appModel.switchToAccount(account) },
                                 language: appModel.resolvedLanguage
                             )
                                 .padding(.horizontal, 8)
-                            if account.id != appModel.sortedAccounts.last?.id {
-                                sectionDivider
-                                    .padding(.horizontal, 8)
-                            }
                         }
                     }
                     .padding(.vertical, 2)

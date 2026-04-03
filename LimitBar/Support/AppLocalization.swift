@@ -55,6 +55,36 @@ struct AppStrings {
     var polling: String { tr(en: "Polling", ru: "Опрос") }
     var languageTitle: String { tr(en: "Language", ru: "Язык") }
     var appLanguage: String { tr(en: "App language", ru: "Язык приложения") }
+    var status: String { tr(en: "Status", ru: "Статус") }
+    var save: String { tr(en: "Save", ru: "Сохранить") }
+    var clear: String { tr(en: "Clear", ru: "Очистить") }
+    var claudeQuotaTitle: String { tr(en: "Claude quota", ru: "Квота Claude") }
+    var claudeWebConnected: String { tr(en: "Web session connected", ru: "Web-сессия подключена") }
+    var claudeWebMissing: String { tr(en: "Web session missing", ru: "Web-сессия не подключена") }
+    var claudeWebDescription: String {
+        tr(
+            en: "Recommended: sign in to claude.ai inside LimitBar once. Then Claude percentages are fetched from the same web session instead of guessed from local token logs.",
+            ru: "Рекомендуется: один раз войти в claude.ai прямо внутри LimitBar. После этого проценты Claude будут браться из той же web-сессии, а не вычисляться по локальным token-логам."
+        )
+    }
+    var claudeWebConnect: String { tr(en: "Connect Claude Web", ru: "Подключить Claude Web") }
+    var claudeWebSheetTitle: String { tr(en: "Claude Web Session", ru: "Claude Web Session") }
+    var done: String { tr(en: "Done", ru: "Готово") }
+    var claudeCookieConnected: String { tr(en: "Cookie connected", ru: "Cookie подключён") }
+    var claudeCookieMissing: String { tr(en: "Cookie missing", ru: "Cookie отсутствует") }
+    var claudeCookieFieldTitle: String { tr(en: "Claude session cookie", ru: "Cookie сессии Claude") }
+    var claudeCookieDescription: String {
+        tr(
+            en: "Paste the Cookie header from claude.ai/settings/usage to unlock real session and weekly percentages for Claude accounts.",
+            ru: "Вставьте заголовок Cookie со страницы claude.ai/settings/usage, чтобы получать реальные проценты по сессии и неделе для аккаунтов Claude."
+        )
+    }
+    var claudeCookiePlaceholder: String {
+        tr(
+            en: "Cookie: sessionKey=...; lastActiveOrg=...;",
+            ru: "Cookie: sessionKey=...; lastActiveOrg=...;"
+        )
+    }
     var whileCodexRunning: String { tr(en: "While Codex is running", ru: "Когда Codex запущен") }
     var whileCodexClosed: String { tr(en: "While Codex is closed", ru: "Когда Codex закрыт") }
     var cooldown: String { tr(en: "Cooldown", ru: "Ожидание") }
@@ -112,6 +142,24 @@ struct AppStrings {
     var codexRunning: String { tr(en: "Codex running", ru: "Codex запущен") }
     var codexNotRunning: String { tr(en: "Codex not running", ru: "Codex не запущен") }
     var deleteAccountHelp: String { tr(en: "Delete account", ru: "Удалить аккаунт") }
+    var switchAccountHelp: String { tr(en: "Switch to this account", ru: "Переключиться на этот аккаунт") }
+    var activeAccountLabel: String { tr(en: "Active", ru: "Активен") }
+    var switchingAccount: String { tr(en: "Switching…", ru: "Переключение…") }
+    var tokensToday: String { tr(en: "Today", ru: "Сегодня") }
+    var tokensWeek: String { tr(en: "Week", ru: "Неделя") }
+    var tokensUnit: String { tr(en: "tokens", ru: "токенов") }
+
+    func formattedTokens(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        }
+        if count >= 1_000 {
+            return String(format: "%.0fK", Double(count) / 1_000)
+        }
+        return "\(count)"
+    }
+    var emailLabel: String { tr(en: "Email", ru: "Email") }
+    var emailPlaceholder: String { tr(en: "your@email.com", ru: "your@email.com") }
     var deleteAccountTitle: String { tr(en: "Delete this account from LimitBar?", ru: "Удалить этот аккаунт из LimitBar?") }
     var delete: String { tr(en: "Delete", ru: "Удалить") }
     var cancel: String { tr(en: "Cancel", ru: "Отмена") }

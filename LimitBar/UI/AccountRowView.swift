@@ -4,7 +4,10 @@ struct AccountRowView: View {
     let account: Account
     let snapshot: UsageSnapshot?
     let metadata: AccountMetadata
+    let isActive: Bool
+    let canSwitch: Bool
     let onDelete: () -> Void
+    let onSwitch: () -> Void
     let language: ResolvedAppLanguage
     private let detailRowHeight: CGFloat = 24
     private let detailRowSpacing: CGFloat = 3
@@ -75,7 +78,7 @@ struct AccountRowView: View {
 
     private var headerLine: some View {
         HStack(alignment: .center, spacing: 10) {
-            codexMark
+            providerMark
 
             Text(presentation.title)
                 .font(.system(size: 12, weight: .semibold))
@@ -86,6 +89,12 @@ struct AccountRowView: View {
 
             if let planLabel = presentation.planLabel {
                 planBadge(planLabel)
+            }
+
+            if isActive {
+                activeIndicator
+            } else if canSwitch {
+                switchButton
             }
 
             deleteButton
@@ -104,6 +113,8 @@ struct AccountRowView: View {
         HStack(alignment: .center, spacing: 8) {
             if sessionUsage != nil || weeklyUsage != nil {
                 gaugeCluster
+            } else if let tokenDials = claudeTokenDials {
+                claudeGaugeCluster(tokenDials)
             }
 
             VStack(alignment: .leading, spacing: 5) {
@@ -111,6 +122,70 @@ struct AccountRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var claudeTokenDials: (today: Int, week: Int)? {
+        guard account.provider == "Claude",
+              let today = presentation.totalTokensToday,
+              let week = presentation.totalTokensThisWeek,
+              week > 0 else { return nil }
+        return (today: today, week: week)
+    }
+
+    private func claudeGaugeCluster(_ dials: (today: Int, week: Int)) -> some View {
+        HStack(alignment: .center, spacing: 6) {
+            claudeTokenDialCard(
+                title: strings.tokensToday,
+                count: dials.today,
+                arcProgress: min(1.0, Double(dials.today) / Double(dials.week))
+            )
+            claudeTokenDialCard(
+                title: strings.tokensWeek,
+                count: dials.week,
+                arcProgress: 1.0,
+                isMuted: true
+            )
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 7)
+        .frame(height: metricsBlockHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.028))
+        )
+    }
+
+    private func claudeTokenDialCard(title: String, count: Int, arcProgress: Double, isMuted: Bool = false) -> some View {
+        VStack(spacing: 3) {
+            ZStack {
+                GaugeArcShape(progress: 1)
+                    .stroke(
+                        Color.secondary.opacity(0.16),
+                        style: StrokeStyle(lineWidth: 4.0, lineCap: .round)
+                    )
+                if !isMuted {
+                    GaugeArcShape(progress: arcProgress)
+                        .stroke(
+                            Color.purple.opacity(0.75),
+                            style: StrokeStyle(lineWidth: 4.0, lineCap: .round)
+                        )
+                }
+                Text(strings.formattedTokens(count))
+                    .font(.system(size: 9.5, weight: .bold).monospacedDigit())
+                    .foregroundStyle(isMuted ? .secondary : .primary)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .frame(width: 32)
+            }
+            .frame(width: 40, height: 40)
+
+            Text(title)
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(width: 54)
+        .frame(minHeight: 54)
     }
 
     private var gaugeCluster: some View {
@@ -169,6 +244,31 @@ struct AccountRowView: View {
                     tone: statusChip.tone.color
                 )
             }
+
+            if sessionUsage == nil, weeklyUsage == nil,
+               let tokensToday = presentation.totalTokensToday {
+                detailRow(
+                    title: strings.tokensToday,
+                    value: strings.formattedTokens(tokensToday),
+                    tone: Color.primary
+                )
+
+                if let tokensWeek = presentation.totalTokensThisWeek {
+                    detailRow(
+                        title: strings.tokensWeek,
+                        value: strings.formattedTokens(tokensWeek),
+                        tone: Color.secondary
+                    )
+                }
+
+                if let planLabel = presentation.planLabel {
+                    detailRow(
+                        title: strings.plan,
+                        value: planLabel,
+                        tone: Color.secondary
+                    )
+                }
+            }
         }
         .padding(.horizontal, metricsBlockPadding)
         .padding(.vertical, metricsBlockPadding)
@@ -192,8 +292,8 @@ struct AccountRowView: View {
         return subscriptionChip.text
     }
 
-    private var codexMark: some View {
-        CodexMarkView(size: .compact)
+    private var providerMark: some View {
+        ProviderMarkView(provider: account.provider, size: .compact)
     }
 
     private func planBadge(_ text: String) -> some View {
@@ -222,6 +322,35 @@ struct AccountRowView: View {
         }
         .buttonStyle(RowIconButtonStyle())
         .help(strings.deleteAccountHelp)
+    }
+
+    private var activeIndicator: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(Color.green)
+                .frame(width: 5, height: 5)
+            Text(strings.activeAccountLabel)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.green)
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2.5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.green.opacity(0.1))
+        )
+    }
+
+    private var switchButton: some View {
+        Button(action: onSwitch) {
+            Image(systemName: "bolt.fill")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.orange.opacity(0.7))
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(RowIconButtonStyle())
+        .help(strings.switchAccountHelp)
     }
 
     private func chip(_ chip: PresentationChip, softened: Bool = false) -> some View {

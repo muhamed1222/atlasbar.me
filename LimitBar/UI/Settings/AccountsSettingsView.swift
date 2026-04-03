@@ -62,12 +62,29 @@ struct AccountsSettingsView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                accountSummaryCard(presentation)
+                accountSummaryCard(account: account, presentation: presentation)
 
                 Form {
                     Section(strings.identity) {
                         ForEach(presentation.identityRows, id: \.title) { row in
                             detailRow(row.title, value: row.value)
+                        }
+
+                        if account.provider == "Claude" {
+                            HStack {
+                                Text(strings.emailLabel)
+                                Spacer()
+                                TextField(
+                                    strings.emailPlaceholder,
+                                    text: Binding(
+                                        get: { account.email ?? "" },
+                                        set: { appModel.updateAccountEmail($0, for: account.id) }
+                                    )
+                                )
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: 220)
+                            }
                         }
                     }
 
@@ -145,7 +162,7 @@ struct AccountsSettingsView: View {
 
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                CodexMarkView(size: .regular, style: .elevated)
+                ProviderMarkView(provider: account.provider, size: .regular, style: .elevated)
                 Text(presentation.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
@@ -176,11 +193,11 @@ struct AccountsSettingsView: View {
         .padding(.vertical, 3)
     }
 
-    private func accountSummaryCard(_ presentation: AccountDetailPresentation) -> some View {
+    private func accountSummaryCard(account: Account, presentation: AccountDetailPresentation) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 HStack(alignment: .top, spacing: 10) {
-                    CodexMarkView(size: .prominent, style: .elevated)
+                    ProviderMarkView(provider: account.provider, size: .prominent, style: .elevated)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(presentation.title)
