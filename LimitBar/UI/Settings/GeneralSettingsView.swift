@@ -10,6 +10,31 @@ struct GeneralSettingsView: View {
         let strings = appModel.strings
 
         Form {
+            Section(strings.trackingSourcesTitle) {
+                Text(strings.trackingSourcesDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let persistenceErrorMessage = appModel.persistenceErrorMessage, !persistenceErrorMessage.isEmpty {
+                Section(strings.localStorageErrorTitle) {
+                    Text(persistenceErrorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if let switchErrorMessage = appModel.switchErrorMessage, !switchErrorMessage.isEmpty {
+                Section(strings.accountSwitchErrorTitle) {
+                    Text(switchErrorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             Section(strings.polling) {
                 Stepper(
                     value: runningIntervalBinding,

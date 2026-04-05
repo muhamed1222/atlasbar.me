@@ -26,6 +26,7 @@ final class ClaudeWebSessionController: NSObject, ObservableObject, @unchecked S
     }()
 
     private var navigationContinuation: CheckedContinuation<Void, Error>?
+    private var pendingNavigationTask: Task<Void, Error>?
 
     override init() {
         self.websiteDataStore = .default()
@@ -37,7 +38,7 @@ final class ClaudeWebSessionController: NSObject, ObservableObject, @unchecked S
     }
 
     func prepareLoginPage() {
-        guard navigationContinuation == nil else { return }
+        guard pendingNavigationTask == nil else { return }
         if internalWebView.url?.host == "claude.ai" { return }
         internalWebView.load(URLRequest(url: Self.usageURL))
     }
@@ -97,10 +98,20 @@ final class ClaudeWebSessionController: NSObject, ObservableObject, @unchecked S
             return
         }
 
-        try await withCheckedThrowingContinuation { continuation in
-            navigationContinuation = continuation
-            internalWebView.load(URLRequest(url: Self.usageURL))
+        if let pending = pendingNavigationTask {
+            try await pending.value
+            return
         }
+
+        let task = Task<Void, Error> {
+            try await withCheckedThrowingContinuation { continuation in
+                self.navigationContinuation = continuation
+                self.internalWebView.load(URLRequest(url: Self.usageURL))
+            }
+        }
+        pendingNavigationTask = task
+        defer { pendingNavigationTask = nil }
+        try await task.value
     }
 
     private func execute(

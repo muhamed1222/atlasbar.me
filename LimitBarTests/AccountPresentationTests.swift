@@ -32,11 +32,12 @@ struct AccountPresentationTests {
         #expect(presentation.title == "row@example.com")
         #expect(presentation.planLabel == "Pro")
         #expect(presentation.usageSummary?.text == "S72 W60")
-        #expect(presentation.chips.map(\.text) == ["Codex", "Available", "Expires Jan 16"])
+        #expect(presentation.chips.map(\.text) == ["Codex", "Live", "Available", "Expires Jan 16"])
+        #expect(presentation.sourceChip?.text == "Live")
         #expect(presentation.statusChip == nil)
         #expect(presentation.subscriptionChip?.text == "Expires Jan 16")
         #expect(presentation.resetAccent == nil)
-        #expect(presentation.chips.map(\.tone) == [.secondary, .green, .orange])
+        #expect(presentation.chips.map(\.tone) == [.secondary, .green, .green, .orange])
         #expect(presentation.usageBars == [
             UsageBarPresentation(label: "S", remainingPercent: 72),
             UsageBarPresentation(label: "W", remainingPercent: 60)
@@ -69,11 +70,52 @@ struct AccountPresentationTests {
         )
 
         #expect(presentation.usageSummary?.text == "1h 30m")
-        #expect(presentation.chips.map(\.text) == ["Codex", "Cooling down"])
+        #expect(presentation.chips.map(\.text) == ["Codex", "Live", "Cooling down"])
+        #expect(presentation.sourceChip?.text == "Live")
+        #expect(presentation.statusChip?.text == "Cooling down")
         #expect(presentation.resetAccent?.title == "Session reset")
         #expect(presentation.resetAccent?.countdownText == "Resets in 1h 30m")
         #expect(presentation.resetAccent?.timeText == "18:16")
         #expect(presentation.resetAccent?.summaryText == "Session reset at 18:16 (in 1h 30m)")
+    }
+
+    @Test
+    func countdownStringShowsLessThanMinuteForShortIntervals() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let target = now.addingTimeInterval(30)
+
+        #expect(countdownString(until: target, now: now) == "<1m")
+    }
+
+    @Test
+    func accountRowPresentationKeepsCachedCountdownForStaleSnapshot() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Codex", email: "stale@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: nil,
+            weeklyPercentUsed: nil,
+            nextResetAt: now.addingTimeInterval(90 * 60),
+            subscriptionExpiresAt: nil,
+            usageStatus: .stale,
+            sourceConfidence: 1,
+            lastSyncedAt: now.addingTimeInterval(-120),
+            rawExtractedStrings: []
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.usageSummary?.text == "1h 30m")
+        #expect(presentation.chips.map(\.text) == ["Codex", "Stale"])
+        #expect(presentation.sourceChip?.text == "Stale")
+        #expect(presentation.statusChip == nil)
+        #expect(presentation.resetAccent?.countdownText == "Resets in 1h 30m")
     }
 
     @Test
@@ -106,6 +148,66 @@ struct AccountPresentationTests {
     }
 
     @Test
+    func accountRowPresentationKeepsFarFutureResetDetailsVisible() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Codex", email: "future@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 100,
+            weeklyPercentUsed: 64,
+            nextResetAt: now.addingTimeInterval(36 * 60 * 60),
+            subscriptionExpiresAt: nil,
+            usageStatus: .stale,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.resetAccent?.countdownText == "Resets in 36h")
+        #expect(presentation.resetAccent?.timeText == "04:46")
+        #expect(presentation.resetAccent?.countdownTone == .orange)
+    }
+
+    @Test
+    func accountRowPresentationShowsReadyAfterStoredResetPassed() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Codex", email: "ready@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 100,
+            weeklyPercentUsed: 64,
+            nextResetAt: now.addingTimeInterval(-90),
+            subscriptionExpiresAt: nil,
+            usageStatus: .stale,
+            sourceConfidence: 1,
+            lastSyncedAt: now.addingTimeInterval(-600),
+            rawExtractedStrings: []
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.resetAccent?.countdownText == "Ready")
+        #expect(presentation.resetAccent?.countdownValue == "Ready")
+        #expect(presentation.resetAccent?.timeText == "16:45")
+        #expect(presentation.resetAccent?.summaryText == "Session reset at 16:45 (ready)")
+        #expect(presentation.resetAccent?.countdownTone == .green)
+    }
+
+    @Test
     func accountsListRowPresentationCarriesPriorityAndNotePreview() {
         let now = Date(timeIntervalSince1970: 1_000_000)
         let account = Account(id: UUID(), provider: "Codex", email: "list@example.com", label: nil)
@@ -131,7 +233,7 @@ struct AccountPresentationTests {
         )
 
         #expect(presentation.priorityChip?.text == "Backup")
-        #expect(presentation.chips.map(\.text) == ["Codex", "Exhausted", "Expires Feb 1"])
+        #expect(presentation.chips.map(\.text) == ["Codex", "Live", "Exhausted", "Expires Feb 1"])
         #expect(presentation.resetAccent == nil)
         #expect(presentation.notePreview == "Rotate after reset")
     }
@@ -164,7 +266,7 @@ struct AccountPresentationTests {
         #expect(presentation.title == "detail@example.com")
         #expect(presentation.providerLine == "Provider: Codex")
         #expect(presentation.priorityChip?.text == "Auxiliary")
-        #expect(presentation.summaryChips.map(\.text) == ["Available", "Expires Jan 13"])
+        #expect(presentation.summaryChips.map(\.text) == ["Live", "Available", "Expires Jan 13"])
         #expect(presentation.resetAccent?.countdownText == "Resets in 12h")
         #expect(presentation.resetAccent?.timeText == "04:46")
         #expect(presentation.resetAccent?.summaryText == "Session reset at 04:46 (in 12h)")
@@ -172,5 +274,122 @@ struct AccountPresentationTests {
         #expect(Array(presentation.identityRows.map(\.value).prefix(3)) == ["detail@example.com", "Codex", "Expires Jan 13"])
         #expect(presentation.noteFooter == "Optional note for renewal context, handoff, or reminders")
         #expect(presentation.noteCharacterCount == "0 characters")
+    }
+
+    @Test
+    func accountRowPresentationTreatsClaudeProviderCaseInsensitively() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "claude", email: "claude@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: nil,
+            weeklyPercentUsed: nil,
+            nextResetAt: nil,
+            subscriptionExpiresAt: nil,
+            usageStatus: .available,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: [],
+            totalTokensToday: 12_345,
+            totalTokensThisWeek: 67_890
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.syncText == "Today: 12K")
+        #expect(presentation.totalTokensToday == 12_345)
+        #expect(presentation.totalTokensThisWeek == 67_890)
+    }
+
+    @Test
+    func accountRowPresentationDoesNotInferGoBadgeFromSubstring() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Codex", email: "plan@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 10,
+            weeklyPercentUsed: 10,
+            nextResetAt: nil,
+            subscriptionExpiresAt: nil,
+            planType: "cargo",
+            usageStatus: .available,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.planLabel == "Cargo")
+    }
+
+    @Test
+    func accountRowPresentationMarksClaudeTokenOnlySnapshotAsLocalOnly() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Claude", email: "local@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: nil,
+            weeklyPercentUsed: nil,
+            nextResetAt: nil,
+            subscriptionExpiresAt: nil,
+            usageStatus: .available,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: [],
+            totalTokensToday: 4_200,
+            totalTokensThisWeek: 12_000
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.sourceChip?.text == "Local only")
+        #expect(presentation.chips.map(\.text) == ["Claude", "Local only", "Available"])
+    }
+
+    @Test
+    func accountRowPresentationMarksLowConfidenceSnapshotAsCached() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Codex", email: "cached@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 10,
+            weeklyPercentUsed: 20,
+            nextResetAt: nil,
+            subscriptionExpiresAt: nil,
+            usageStatus: .available,
+            sourceConfidence: 0.4,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.sourceChip?.text == "Cached")
+        #expect(presentation.chips.map(\.text) == ["Codex", "Cached", "Available"])
     }
 }

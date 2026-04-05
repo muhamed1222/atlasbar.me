@@ -71,11 +71,55 @@ private struct FakeCurrentUsageProvider: CurrentUsageProviding {
     }
 }
 
+private actor SlowTrackingUsageProvider: CurrentUsageProviding {
+    let result: CurrentUsagePayload?
+    let delayNanoseconds: UInt64
+    private var activeCalls = 0
+    private var maxConcurrentCalls = 0
+    private var totalCalls = 0
+
+    init(result: CurrentUsagePayload?, delayNanoseconds: UInt64) {
+        self.result = result
+        self.delayNanoseconds = delayNanoseconds
+    }
+
+    func fetchCurrentUsage() async -> CurrentUsagePayload? {
+        totalCalls += 1
+        activeCalls += 1
+        maxConcurrentCalls = max(maxConcurrentCalls, activeCalls)
+        try? await Task.sleep(nanoseconds: delayNanoseconds)
+        activeCalls -= 1
+        return result
+    }
+
+    func recordedStats() -> (totalCalls: Int, maxConcurrentCalls: Int) {
+        (totalCalls, maxConcurrentCalls)
+    }
+}
+
 private struct AppModelFakeClaudeCredentialsReader: ClaudeCredentialsReading {
     let credentials: ClaudeCredentials?
 
     func readCredentials() -> ClaudeCredentials? {
         credentials
+    }
+}
+
+private final class SequencedClaudeCredentialsReader: @unchecked Sendable, ClaudeCredentialsReading {
+    private let values: [ClaudeCredentials?]
+    private var index = 0
+
+    init(_ values: [ClaudeCredentials?]) {
+        self.values = values
+    }
+
+    func readCredentials() -> ClaudeCredentials? {
+        defer {
+            if index < values.count - 1 {
+                index += 1
+            }
+        }
+        return values[min(index, values.count - 1)]
     }
 }
 
@@ -131,8 +175,18 @@ private struct FakeRunningChecker: CodexRunningChecking {
     let isCodexRunning: Bool
 }
 
-private final class InMemorySnapshotStore: SnapshotStoring {
+private struct ActiveEmailVault: AccountVaulting {
+    let email: String?
+
+    func saveCurrentAuth(for email: String) throws {}
+    func hasSavedAuth(for email: String) -> Bool { true }
+    func switchTo(email: String) throws {}
+    func activeEmail() -> String? { email }
+}
+
+private final class InMemorySnapshotStore: @unchecked Sendable, SnapshotStoring {
     private var state: PersistedState
+    var lastLoadIssue: String?
 
     init(state: PersistedState = PersistedState(accounts: [], snapshots: [])) {
         self.state = state
@@ -151,20 +205,53 @@ private final class InMemorySnapshotStore: SnapshotStoring {
     }
 }
 
-private final class RecordingNotificationManager: NotificationScheduling {
-    private(set) var scheduled: [(String, Date)] = []
-    private(set) var cancelled: [String] = []
+private enum PersistenceTestError: LocalizedError {
+    case diskFull
+
+    var errorDescription: String? {
+        "Disk full"
+    }
+}
+
+private final class SaveFailingSnapshotStore: @unchecked Sendable, SnapshotStoring {
+    private let state: PersistedState
+    private let saveError: any Error
+    var lastLoadIssue: String?
+
+    init(
+        state: PersistedState = PersistedState(accounts: [], snapshots: []),
+        saveError: any Error = PersistenceTestError.diskFull
+    ) {
+        self.state = state
+        self.saveError = saveError
+    }
+
+    func load() -> PersistedState {
+        state
+    }
+
+    func save(_ state: PersistedState) throws {
+        _ = state
+        throw saveError
+    }
+
+    func reset() throws {}
+}
+
+private final class RecordingNotificationManager: @unchecked Sendable, NotificationScheduling {
+    private(set) var scheduled: [(accountId: UUID, accountName: String, date: Date)] = []
+    private(set) var cancelled: [(accountId: UUID, accountName: String)] = []
 
     func requestAuthorization() async -> Bool {
         true
     }
 
-    func scheduleCooldownReadyNotification(accountName: String, at date: Date) {
-        scheduled.append((accountName, date))
+    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date) {
+        scheduled.append((accountId, accountName, date))
     }
 
-    func cancelCooldownReadyNotification(accountName: String) {
-        cancelled.append(accountName)
+    func cancelCooldownReadyNotification(accountId: UUID, accountName: String) {
+        cancelled.append((accountId, accountName))
     }
 
     func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {}
@@ -221,9 +308,9 @@ private func makeAppModelTempStore() throws -> SnapshotStore {
     return try SnapshotStore(directory: tmp)
 }
 
-private final class NotificationManagerSpy: NotificationScheduling {
-    var cooldownScheduled: [(accountName: String, date: Date)] = []
-    var cooldownCancelled: [String] = []
+private final class NotificationManagerSpy: @unchecked Sendable, NotificationScheduling {
+    var cooldownScheduled: [(accountId: UUID, accountName: String, date: Date)] = []
+    var cooldownCancelled: [(accountId: UUID, accountName: String)] = []
     var renewalScheduled: [RenewalReminderRequest] = []
     var cancelledIdentifiers: [String] = []
 
@@ -231,12 +318,12 @@ private final class NotificationManagerSpy: NotificationScheduling {
         true
     }
 
-    func scheduleCooldownReadyNotification(accountName: String, at date: Date) {
-        cooldownScheduled.append((accountName, date))
+    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date) {
+        cooldownScheduled.append((accountId, accountName, date))
     }
 
-    func cancelCooldownReadyNotification(accountName: String) {
-        cooldownCancelled.append(accountName)
+    func cancelCooldownReadyNotification(accountId: UUID, accountName: String) {
+        cooldownCancelled.append((accountId, accountName))
     }
 
     func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {
@@ -682,7 +769,7 @@ struct AppModelTests {
             weeklyPercentUsed: nil,
             nextResetAt: now.addingTimeInterval(60 * 60),
             subscriptionExpiresAt: now.addingTimeInterval(10 * 24 * 60 * 60),
-            usageStatus: .available,
+            usageStatus: .coolingDown,
             sourceConfidence: 1,
             lastSyncedAt: now,
             rawExtractedStrings: []
@@ -727,7 +814,9 @@ struct AppModelTests {
 
         model.deleteAccount(account)
 
-        #expect(notificationManager.cooldownCancelled == [account.displayName])
+        #expect(notificationManager.cooldownCancelled.count == 1)
+        #expect(notificationManager.cooldownCancelled.first?.accountId == account.id)
+        #expect(notificationManager.cooldownCancelled.first?.accountName == account.displayName)
         #expect(
             Set(notificationManager.cancelledIdentifiers) ==
             Set(RenewalReminderScheduler().reminderIdentifiers(for: account.id))
@@ -752,7 +841,9 @@ struct AppModelTests {
 
         model.resetAllData()
 
-        #expect(notificationManager.cooldownCancelled == [account.displayName])
+        #expect(notificationManager.cooldownCancelled.count == 1)
+        #expect(notificationManager.cooldownCancelled.first?.accountId == account.id)
+        #expect(notificationManager.cooldownCancelled.first?.accountName == account.displayName)
         #expect(
             Set(notificationManager.cancelledIdentifiers) ==
             Set(RenewalReminderScheduler().reminderIdentifiers(for: account.id))
@@ -784,6 +875,7 @@ struct AppModelTests {
             sessionPercentUsed: 84,
             weeklyPercentUsed: 52,
             nextResetAt: Date(timeIntervalSince1970: 1_700_000_600),
+            weeklyResetAt: Date(timeIntervalSince1970: 1_700_604_800),
             status: .coolingDown
         )
         let provider = APIBasedUsageProvider(
@@ -797,6 +889,7 @@ struct AppModelTests {
         #expect(result?.planType == "pro")
         #expect(result?.sessionPercentUsed == 84)
         #expect(result?.weeklyPercentUsed == 52)
+        #expect(result?.weeklyResetAt == Date(timeIntervalSince1970: 1_700_604_800))
         #expect(result?.usageStatus == .coolingDown)
         #expect(result?.sourceConfidence == 1.0)
     }
@@ -821,6 +914,7 @@ struct AppModelTests {
             sessionPercentUsed: 84,
             weeklyPercentUsed: 52,
             nextResetAt: Date(timeIntervalSince1970: 1_700_000_600),
+            weeklyResetAt: Date(timeIntervalSince1970: 1_700_604_800),
             status: .coolingDown
         )
         let provider = APIBasedUsageProvider(
@@ -1106,6 +1200,37 @@ struct AppModelTests {
     }
 
     @Test
+    func refreshSchedulesNotificationForExhaustedSnapshotWithKnownReset() async {
+        let store = InMemorySnapshotStore()
+        let notifications = RecordingNotificationManager()
+        let resetAt = Date().addingTimeInterval(4 * 60 * 60 + 49 * 60)
+        let providerPayload = CurrentUsagePayload(
+            accountIdentifier: "zero@example.com",
+            planType: "plus",
+            subscriptionExpiresAt: nil,
+            sessionPercentUsed: 100,
+            weeklyPercentUsed: 40,
+            nextResetAt: resetAt,
+            usageStatus: .exhausted,
+            sourceConfidence: 1.0,
+            rawExtractedStrings: []
+        )
+        let model = AppModel(
+            usageProvider: FakeCurrentUsageProvider(result: providerPayload),
+            runningChecker: FakeRunningChecker(isCodexRunning: true),
+            notificationManager: notifications,
+            store: store,
+            shouldStartPolling: false
+        )
+
+        await model.refreshNowAsync()
+
+        #expect(model.compactLabel == countdownString(until: resetAt, language: model.resolvedLanguage))
+        #expect(notifications.scheduled.count == 1)
+        #expect(notifications.scheduled.first?.date == resetAt)
+    }
+
+    @Test
     func refreshMarksExistingUsageAsStaleWhenFetchFails() async throws {
         let store = InMemorySnapshotStore()
         let notifications = RecordingNotificationManager()
@@ -1141,6 +1266,7 @@ struct AppModelTests {
             runningChecker: FakeRunningChecker(isCodexRunning: true),
             notificationManager: notifications,
             store: store,
+            vault: ActiveEmailVault(email: account.email),
             shouldStartPolling: false
         )
 
@@ -1154,6 +1280,84 @@ struct AppModelTests {
             } == staleUsageLabel(hasSnapshots: true, language: model.resolvedLanguage)
         )
         #expect(notifications.scheduled.isEmpty)
+    }
+
+    @Test
+    func refreshKeepsCachedInactiveCodexCooldownWhenActiveAccountFails() async throws {
+        let notifications = RecordingNotificationManager()
+        let now = Date()
+        let activeAccount = Account(
+            id: UUID(),
+            provider: Provider.codex.name,
+            email: "active@example.com",
+            label: nil
+        )
+        let backupAccount = Account(
+            id: UUID(),
+            provider: Provider.codex.name,
+            email: "backup@example.com",
+            label: nil
+        )
+        let backupResetAt = now.addingTimeInterval(36 * 60 * 60)
+        let store = InMemorySnapshotStore(
+            state: PersistedState(
+                accounts: [activeAccount, backupAccount],
+                snapshots: [
+                    UsageSnapshot(
+                        id: UUID(),
+                        accountId: activeAccount.id,
+                        sessionPercentUsed: 75,
+                        weeklyPercentUsed: 20,
+                        nextResetAt: nil,
+                        subscriptionExpiresAt: nil,
+                        usageStatus: .available,
+                        sourceConfidence: 1.0,
+                        lastSyncedAt: now.addingTimeInterval(-300),
+                        rawExtractedStrings: []
+                    ),
+                    UsageSnapshot(
+                        id: UUID(),
+                        accountId: backupAccount.id,
+                        sessionPercentUsed: 100,
+                        weeklyPercentUsed: 64,
+                        nextResetAt: backupResetAt,
+                        subscriptionExpiresAt: nil,
+                        usageStatus: .coolingDown,
+                        sourceConfidence: 1.0,
+                        lastSyncedAt: now.addingTimeInterval(-600),
+                        rawExtractedStrings: []
+                    )
+                ],
+                accountMetadata: [],
+                settings: .default
+            )
+        )
+
+        let model = AppModel(
+            usageProvider: FakeCurrentUsageProvider(result: nil),
+            runningChecker: FakeRunningChecker(isCodexRunning: true),
+            notificationManager: notifications,
+            store: store,
+            vault: ActiveEmailVault(email: activeAccount.email),
+            shouldStartPolling: false
+        )
+
+        await model.refreshNowAsync()
+
+        let activeSnapshot = model.snapshots.first { $0.accountId == activeAccount.id }
+        let backupSnapshot = model.snapshots.first { $0.accountId == backupAccount.id }
+
+        #expect(activeSnapshot?.usageStatus == .stale)
+        #expect(backupSnapshot?.usageStatus == .coolingDown)
+        #expect(backupSnapshot?.nextResetAt == backupResetAt)
+        #expect(model.compactLabel == countdownString(until: backupResetAt, language: model.resolvedLanguage))
+        #expect(
+            notifications.scheduled.contains {
+                $0.accountId == backupAccount.id &&
+                $0.accountName == backupAccount.displayName &&
+                $0.date == backupResetAt
+            }
+        )
     }
 
     @Test
@@ -1187,6 +1391,36 @@ struct AppModelTests {
         #expect(store.load().accounts.count == 1)
         #expect(store.load().snapshots.count == 1)
         #expect(notifications.scheduled.count == 1)
+    }
+
+    @Test
+    func usageStateCoordinatorSchedulesNotificationForExhaustedSnapshotWithFutureReset() throws {
+        let store = InMemorySnapshotStore()
+        let notifications = RecordingNotificationManager()
+        let coordinator = UsageStateCoordinator(
+            store: store,
+            notificationManager: notifications
+        )
+        let resetAt = Date().addingTimeInterval(30 * 60)
+        let payload = CurrentUsagePayload(
+            accountIdentifier: "wait@example.com",
+            planType: "plus",
+            subscriptionExpiresAt: nil,
+            sessionPercentUsed: 100,
+            weeklyPercentUsed: 50,
+            nextResetAt: resetAt,
+            usageStatus: .exhausted,
+            sourceConfidence: 1.0,
+            rawExtractedStrings: []
+        )
+
+        _ = try coordinator.applyRefresh(
+            payload,
+            to: PersistedState(accounts: [], snapshots: [])
+        )
+
+        #expect(notifications.scheduled.count == 1)
+        #expect(notifications.scheduled.first?.date == resetAt)
     }
 
     @Test
@@ -1277,6 +1511,109 @@ struct AppModelTests {
 
         #expect(model.claudeCookieConfigured == false)
         #expect(cookieStore.cookieHeaderValue() == nil)
+    }
+
+    @Test
+    func refreshNowAsyncCoalescesConcurrentRefreshRequests() async {
+        let provider = SlowTrackingUsageProvider(
+            result: CurrentUsagePayload(
+                accountIdentifier: "coalesce@example.com",
+                planType: nil,
+                subscriptionExpiresAt: nil,
+                sessionPercentUsed: 25,
+                weeklyPercentUsed: 40,
+                nextResetAt: nil,
+                usageStatus: .available,
+                sourceConfidence: 1,
+                rawExtractedStrings: [],
+                provider: Provider.codex.name
+            ),
+            delayNanoseconds: 150_000_000
+        )
+        let model = AppModel(
+            usageProvider: provider,
+            runningChecker: FakeRunningChecker(isCodexRunning: true),
+            store: InMemorySnapshotStore(),
+            vault: ActiveEmailVault(email: "coalesce@example.com"),
+            shouldStartPolling: false
+        )
+
+        async let first: Void = model.refreshNowAsync()
+        async let second: Void = model.refreshNowAsync()
+        _ = await (first, second)
+
+        let stats = await provider.recordedStats()
+        #expect(stats.totalCalls == 1)
+        #expect(stats.maxConcurrentCalls == 1)
+        #expect(model.accounts.count == 1)
+        #expect(model.snapshots.count == 1)
+    }
+
+    @Test
+    func persistenceErrorMessageIsExposedWhenSavingStateFails() {
+        let model = AppModel(
+            store: SaveFailingSnapshotStore(),
+            shouldStartPolling: false
+        )
+
+        model.setLanguage(.russian)
+
+        #expect(model.persistenceErrorMessage?.contains("Disk full") == true)
+    }
+
+    @Test
+    func persistenceErrorMessageIsExposedWhenInitialNormalizationSaveFails() {
+        let canonicalAccount = Account(
+            id: UUID(),
+            provider: Provider.claude.name,
+            email: "outcastsdev@gmail.com",
+            label: nil
+        )
+        let legacyAccount = Account(
+            id: UUID(),
+            provider: Provider.claude.name,
+            email: nil,
+            label: "Claude Code"
+        )
+        let store = SaveFailingSnapshotStore(
+            state: PersistedState(
+                accounts: [canonicalAccount, legacyAccount],
+                snapshots: [],
+                accountMetadata: [],
+                settings: .default
+            )
+        )
+
+        let model = AppModel(
+            store: store,
+            shouldStartPolling: false
+        )
+
+        #expect(model.persistenceErrorMessage?.contains("Disk full") == true)
+    }
+
+    @Test
+    func persistenceErrorMessageIsExposedWhenInitialStateIsCorrupted() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LimitBarCorrupted-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try "{ not valid json".data(using: .utf8)?.write(
+            to: directory.appendingPathComponent("state.json"),
+            options: .atomic
+        )
+
+        let store = try SnapshotStore(directory: directory)
+        let model = AppModel(
+            store: store,
+            shouldStartPolling: false
+        )
+
+        #expect(model.persistenceErrorMessage?.localizedCaseInsensitiveContains("corrupted") == true)
+        let backups = try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ).filter { $0.lastPathComponent.hasPrefix("state.corrupted.") }
+        #expect(backups.count == 1)
     }
 
     @Test
@@ -1425,6 +1762,47 @@ struct AppModelTests {
         await model.refreshClaudeWebSessionStatus()
 
         #expect(model.claudeWebSessionConnected == false)
+    }
+
+    @Test
+    func claudeWebSessionStatusIgnoresStaleResultWhenOrganizationChangesMidRefresh() async {
+        let controller = FakeClaudeWebSessionController()
+        controller.resultByOrganization["org-old"] = ClaudeWebFetchResult(
+            status: 200,
+            body: """
+            {
+              "five_hour": {
+                "remaining_percent": 50,
+                "reset_at": "2026-04-03T10:00:00Z"
+              }
+            }
+            """,
+            url: "https://claude.ai/settings/usage",
+            organizationUUID: "org-old"
+        )
+
+        let model = AppModel(
+            store: InMemorySnapshotStore(),
+            claudeCredentialsReader: SequencedClaudeCredentialsReader([
+                ClaudeCredentials(
+                    subscriptionType: "pro",
+                    accountIdentifier: "outcastsdev@gmail.com",
+                    organizationUUID: "org-old"
+                ),
+                ClaudeCredentials(
+                    subscriptionType: "pro",
+                    accountIdentifier: "outcastsdev@gmail.com",
+                    organizationUUID: "org-new"
+                )
+            ]),
+            claudeWebSessionController: controller,
+            shouldStartPolling: false
+        )
+
+        await model.refreshClaudeWebSessionStatus()
+
+        #expect(model.claudeWebSessionConnected == false)
+        #expect(model.claudeWebSessionErrorMessage == nil)
     }
 
     @Test

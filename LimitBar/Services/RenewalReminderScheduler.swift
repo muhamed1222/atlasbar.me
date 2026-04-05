@@ -7,7 +7,7 @@ struct RenewalReminderRequest: Equatable {
     var body: String
 }
 
-protocol RenewalNotificationScheduling {
+protocol RenewalNotificationScheduling: Sendable {
     func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date)
     func cancelNotifications(withIdentifiers identifiers: [String])
 }

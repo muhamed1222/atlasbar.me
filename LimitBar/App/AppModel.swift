@@ -28,6 +28,7 @@ final class AppModel: ObservableObject {
     @Published var claudeCookieErrorMessage: String?
     @Published var claudeWebSessionConnected: Bool = false
     @Published var claudeWebSessionErrorMessage: String?
+    @Published var persistenceErrorMessage: String?
 
     var resolvedLanguage: ResolvedAppLanguage {
         settings.language.resolved()
@@ -43,9 +44,11 @@ final class AppModel: ObservableObject {
 
     private let usageProvider: any CurrentUsageProviding
     private let claudeUsageProvider: (any CurrentUsageProviding)?
+    private let claudeUsagePipeline: (any ClaudeUsagePipelining)?
     private let runningChecker: any CodexRunningChecking
     private let pollingCoordinator: PollingCoordinator
     private let stateCoordinator: UsageStateCoordinator
+    private let refreshCoordinator: UsageRefreshCoordinator
     private let notificationManager: any NotificationScheduling
     private let renewalReminderScheduler = RenewalReminderScheduler()
     private let store: (any SnapshotStoring)?
@@ -56,6 +59,7 @@ final class AppModel: ObservableObject {
     private let claudeSessionCookieStore: (any ClaudeSessionCookieStoring)?
     private let claudeWebSessionController: (any ClaudeWebSessionControlling)?
     private var timerTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
 
     init(
         usageProvider: any CurrentUsageProviding = APIBasedUsageProvider(),
@@ -66,13 +70,15 @@ final class AppModel: ObservableObject {
         vault: (any AccountVaulting)? = nil,
         sessionSwitcher: (any CodexSessionSwitching)? = nil,
         claudeUsageProvider: (any CurrentUsageProviding)? = nil,
+        claudeUsagePipeline: (any ClaudeUsagePipelining)? = nil,
         claudeCredentialsReader: (any ClaudeCredentialsReading)? = nil,
         claudeSessionCookieStore: (any ClaudeSessionCookieStoring)? = nil,
         claudeWebSessionController: (any ClaudeWebSessionControlling)? = nil,
         shouldStartPolling: Bool = AppRuntimeDefaults.shouldStartPolling
     ) {
         self.usageProvider = usageProvider
-        self.claudeUsageProvider = claudeUsageProvider
+        self.claudeUsageProvider = claudeUsageProvider ?? claudeUsagePipeline
+        self.claudeUsagePipeline = claudeUsagePipeline
         self.runningChecker = runningChecker
         self.pollingCoordinator = pollingCoordinator
         self.notificationManager = notificationManager
@@ -83,6 +89,7 @@ final class AppModel: ObservableObject {
         self.claudeWebSessionController = claudeWebSessionController
 
         let resolvedStore: (any SnapshotStoring)?
+        var initialPersistenceError: String?
         if let store {
             resolvedStore = store
         } else {
@@ -91,19 +98,35 @@ final class AppModel: ObservableObject {
             } catch {
                 logger.error("Failed to create SnapshotStore: \(error)")
                 resolvedStore = nil
+                initialPersistenceError = error.localizedDescription
             }
         }
         self.store = resolvedStore
-        self.stateCoordinator = UsageStateCoordinator(
+        let stateCoordinator = UsageStateCoordinator(
             store: resolvedStore,
             notificationManager: notificationManager
         )
+        self.stateCoordinator = stateCoordinator
+        self.refreshCoordinator = UsageRefreshCoordinator(
+            usageProvider: usageProvider,
+            claudeUsageProvider: self.claudeUsageProvider,
+            claudeUsagePipeline: claudeUsagePipeline,
+            runningChecker: runningChecker,
+            stateCoordinator: stateCoordinator,
+            vault: self.vault,
+            claudeCredentialsReader: self.claudeCredentialsReader,
+            claudeWebSessionController: claudeWebSessionController
+        )
 
-        let state = stateCoordinator.loadInitialState()
+        let loadResult = stateCoordinator.loadInitialState()
+        let state = loadResult.state
         accounts = state.accounts
         snapshots = state.snapshots
         accountMetadata = deduplicatedMetadata(state.accountMetadata, for: state.accounts)
         settings = settingsCoordinator.sanitized(state.settings)
+        if let details = loadResult.persistenceError ?? initialPersistenceError {
+            persistenceErrorMessage = storageErrorMessage(for: details)
+        }
         claudeCookieConfigured = claudeSessionCookieStore?.hasStoredCookie() ?? false
         refreshCompactLabel()
         reconcilePersistedNotifications()
@@ -124,7 +147,7 @@ final class AppModel: ObservableObject {
     }
 
     func refreshNowAsync() async {
-        await performRefresh()
+        await runRefresh()
     }
 
     func openCodex() {
@@ -156,8 +179,10 @@ final class AppModel: ObservableObject {
             compactLabel = projection.compactLabel
             accountMetadata = []
             settings = .default
+            persistenceErrorMessage = nil
         } catch {
             logger.error("Failed to reset store: \(error)")
+            presentPersistenceError(error)
         }
     }
 
@@ -175,8 +200,10 @@ final class AppModel: ObservableObject {
             snapshots = projection.snapshots
             refreshCompactLabel()
             accountMetadata.removeAll { $0.accountId == account.id }
+            persistenceErrorMessage = nil
         } catch {
             logger.error("Failed to delete account from store: \(error)")
+            presentPersistenceError(error)
         }
     }
 
@@ -226,7 +253,7 @@ final class AppModel: ObservableObject {
             try claudeSessionCookieStore.saveCookie(rawValue)
             claudeCookieConfigured = claudeSessionCookieStore.hasStoredCookie()
             claudeCookieErrorMessage = nil
-            Task { await performRefresh() }
+            Task { await runRefresh() }
             return true
         } catch {
             logger.error("Failed to save Claude session cookie: \(error)")
@@ -242,7 +269,7 @@ final class AppModel: ObservableObject {
             try claudeSessionCookieStore.clearCookie()
             claudeCookieConfigured = false
             claudeCookieErrorMessage = nil
-            Task { await performRefresh() }
+            Task { await runRefresh() }
         } catch {
             logger.error("Failed to clear Claude session cookie: \(error)")
             claudeCookieErrorMessage = error.localizedDescription
@@ -265,7 +292,7 @@ final class AppModel: ObservableObject {
     func finalizeClaudeWebLogin() {
         Task {
             await refreshClaudeWebSessionStatus()
-            await performRefresh()
+            await runRefresh()
         }
     }
 
@@ -276,7 +303,7 @@ final class AppModel: ObservableObject {
                 try await claudeWebSessionController.clearSession()
                 claudeWebSessionConnected = false
                 claudeWebSessionErrorMessage = nil
-                await performRefresh()
+                await runRefresh()
             } catch {
                 logger.error("Failed to clear Claude web session: \(error)")
                 claudeWebSessionErrorMessage = error.localizedDescription
@@ -285,18 +312,51 @@ final class AppModel: ObservableObject {
     }
 
     func refreshClaudeWebSessionStatus() async {
+        if let claudeUsagePipeline {
+            if let projection = await claudeUsagePipeline.refreshWebSessionStatus() {
+                applyClaudeWebSessionStatus(projection)
+            } else {
+                claudeWebSessionConnected = false
+                claudeWebSessionErrorMessage = nil
+            }
+            return
+        }
+
         guard let claudeWebSessionController else { return }
-        guard let credentials = claudeCredentialsReader.readCredentials(),
-              let organizationUUID = credentials.organizationUUID else {
+        guard let requestedOrganizationUUID = claudeCredentialsReader.readCredentials()?.organizationUUID else {
             claudeWebSessionConnected = false
             claudeWebSessionErrorMessage = nil
             return
         }
 
-        let result = await claudeWebSessionController.fetchUsageResponse(organizationUUID: organizationUUID)
+        let result = await claudeWebSessionController.fetchUsageResponse(
+            organizationUUID: requestedOrganizationUUID
+        )
+        let currentOrganizationUUID = claudeCredentialsReader.readCredentials()?.organizationUUID
+
+        guard currentOrganizationUUID == requestedOrganizationUUID else {
+            guard let currentOrganizationUUID else {
+                claudeWebSessionConnected = false
+                claudeWebSessionErrorMessage = nil
+                return
+            }
+
+            applyClaudeWebSessionStatus(
+                ClaudeWebSessionStatusProjection.evaluate(
+                    result: claudeWebSessionController.cachedUsageResponse(
+                        organizationUUID: currentOrganizationUUID
+                    ),
+                    expectedOrganizationUUID: currentOrganizationUUID
+                )
+            )
+            return
+        }
+
         applyClaudeWebSessionStatus(
-            result: result,
-            expectedOrganizationUUID: organizationUUID
+            ClaudeWebSessionStatusProjection.evaluate(
+                result: result,
+                expectedOrganizationUUID: requestedOrganizationUUID
+            )
         )
     }
 
@@ -309,7 +369,10 @@ final class AppModel: ObservableObject {
             if let snapshot = snapshot(for: account.id) {
                 scheduleNotificationIfNeeded(snapshot: snapshot, accountId: account.id)
             } else {
-                notificationManager.cancelCooldownReadyNotification(accountName: account.displayName)
+                notificationManager.cancelCooldownReadyNotification(
+                    accountId: account.id,
+                    accountName: account.displayName
+                )
             }
         }
     }
@@ -362,7 +425,7 @@ final class AppModel: ObservableObject {
         do {
             let confirmedEmail = try await sessionSwitcher.switchTo(email: email)
             activeCodexEmail = confirmedEmail
-            await performRefresh()
+            await runRefresh()
         } catch {
             logger.error("Failed to switch to account: \(error)")
             switchErrorMessage = error.localizedDescription
@@ -393,7 +456,7 @@ final class AppModel: ObservableObject {
         timerTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
-                await self.performRefresh()
+                await self.runRefresh()
                 let interval = self.pollingCoordinator.interval(
                     codexRunning: self.codexRunning,
                     settings: self.settings
@@ -403,132 +466,48 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func runRefresh() async {
+        if let refreshTask {
+            await refreshTask.value
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.refreshTask = nil }
+            await self.performRefresh()
+        }
+        refreshTask = task
+        await task.value
+    }
+
     private func performRefresh() async {
         lastRefreshAt = Date()
-        codexRunning = runningChecker.isCodexRunning
-        let currentEmail = vault.activeEmail()
-        activeCodexEmail = currentEmail
-        if let currentEmail {
-            try? vault.saveCurrentAuth(for: currentEmail)
-        }
-
-        // Fetch Codex and Claude concurrently
-        async let codexFetch = usageProvider.fetchCurrentUsage()
-        async let claudeFetch = claudeUsageProvider?.fetchCurrentUsage()
-
-        let (codexUsage, claudeUsage) = await (codexFetch, claudeFetch)
-
-        // Apply Codex result
-        var workingState = currentPersistedState
-        if let codexUsage {
-            do {
-                let projection = try stateCoordinator.applyRefresh(codexUsage, to: workingState)
-                accounts = projection.accounts
-                snapshots = projection.snapshots
-                workingState = currentPersistedState
-                if let accountId = mostRecentlySyncedAccountId() {
-                    reconcileRenewalReminders(for: accountId)
-                }
-            } catch {
-                logger.error("Failed to apply Codex refresh: \(error)")
-            }
+        let outcome = await refreshCoordinator.refresh(from: currentPersistedState)
+        codexRunning = outcome.codexRunning
+        activeCodexEmail = outcome.activeCodexEmail
+        accounts = outcome.accounts
+        snapshots = outcome.snapshots
+        if let details = outcome.persistenceErrorDetails {
+            persistenceErrorMessage = storageErrorMessage(for: details)
         } else {
-            do {
-                let projection = try stateCoordinator.markProviderStale(
-                    Provider.codex.name,
-                    from: workingState
-                )
-                accounts = projection.accounts
-                snapshots = projection.snapshots
-                workingState = currentPersistedState
-            } catch {
-                logger.error("Failed to mark Codex usage stale: \(error)")
-                compactLabel = staleUsageLabel(hasSnapshots: !snapshots.isEmpty, language: resolvedLanguage)
-            }
+            persistenceErrorMessage = nil
         }
-
-        // Apply Claude result
-        if let claudeUsage {
-            do {
-                let projection = try stateCoordinator.applyRefresh(claudeUsage, to: workingState)
-                accounts = projection.accounts
-                snapshots = projection.snapshots
-                workingState = currentPersistedState
-            } catch {
-                logger.error("Failed to apply Claude refresh: \(error)")
-            }
-        } else {
-            do {
-                let projection = try stateCoordinator.markProviderStale(
-                    Provider.claude.name,
-                    from: workingState
-                )
-                accounts = projection.accounts
-                snapshots = projection.snapshots
-                workingState = currentPersistedState
-            } catch {
-                logger.error("Failed to mark Claude usage stale: \(error)")
-            }
+        if let accountId = outcome.renewalReminderAccountId {
+            reconcileRenewalReminders(for: accountId)
         }
-
-        if let claudeWebSessionController,
-           let organizationUUID = claudeCredentialsReader.readCredentials()?.organizationUUID {
-            applyClaudeWebSessionStatus(
-                result: claudeWebSessionController.cachedUsageResponse(organizationUUID: organizationUUID),
-                expectedOrganizationUUID: organizationUUID
-            )
+        if outcome.shouldReconcileCooldownNotifications {
+            reconcileCooldownNotifications()
         }
-
+        if let claudeWebSessionStatus = outcome.claudeWebSessionStatus {
+            applyClaudeWebSessionStatus(claudeWebSessionStatus)
+        }
         refreshCompactLabel()
     }
 
-    private func applyClaudeWebSessionStatus(
-        result: ClaudeWebFetchResult?,
-        expectedOrganizationUUID: String
-    ) {
-        guard let result else {
-            claudeWebSessionConnected = false
-            claudeWebSessionErrorMessage = nil
-            return
-        }
-
-        guard result.organizationUUID == expectedOrganizationUUID else {
-            claudeWebSessionConnected = false
-            claudeWebSessionErrorMessage = "Claude web session is connected to a different organization."
-            return
-        }
-
-        guard (200...299).contains(result.status) else {
-            claudeWebSessionConnected = false
-            claudeWebSessionErrorMessage = claudeWebSessionErrorMessage(for: result)
-            return
-        }
-
-        guard decodeUsagePayload(from: result.body) != nil else {
-            claudeWebSessionConnected = false
-            claudeWebSessionErrorMessage = "Claude usage endpoint returned an unreadable response."
-            return
-        }
-
-        claudeWebSessionConnected = true
-        claudeWebSessionErrorMessage = nil
-    }
-
-    private func claudeWebSessionErrorMessage(for result: ClaudeWebFetchResult) -> String {
-        let body = result.body.lowercased()
-        if body.contains("account_session_invalid") {
-            return "Claude web session is signed into a different account."
-        }
-        if body.contains("just a moment") || body.contains("cf_chl") || body.contains("cloudflare") {
-            return "Claude blocked the embedded browser with a verification challenge."
-        }
-        if result.status == 403 {
-            return "Claude denied usage access for the current web session."
-        }
-        if result.status == 401 {
-            return "Claude web session expired. Sign in again."
-        }
-        return "Claude usage request failed (\(result.status))."
+    private func applyClaudeWebSessionStatus(_ projection: ClaudeWebSessionStatusProjection) {
+        claudeWebSessionConnected = projection.isConnected
+        claudeWebSessionErrorMessage = projection.errorMessage
     }
 
     private var currentPersistedState: PersistedState {
@@ -570,17 +549,26 @@ final class AppModel: ObservableObject {
 
         let liveSnapshots = snapshots.filter { $0.usageStatus != .stale && $0.usageStatus != .unknown }
         guard !liveSnapshots.isEmpty else {
-            compactLabel = staleUsageLabel(hasSnapshots: !snapshots.isEmpty, language: resolvedLanguage)
-            menuBarState = .noData
+            let nextReset = snapshots
+                .filter { shouldScheduleResetReadyNotification(snapshot: $0) }
+                .compactMap(\.nextResetAt)
+                .min()
+            if let nextReset {
+                compactLabel = countdownString(until: nextReset, language: resolvedLanguage)
+                menuBarState = .allCoolingDown(nextResetAt: nextReset)
+            } else {
+                compactLabel = staleUsageLabel(hasSnapshots: !snapshots.isEmpty, language: resolvedLanguage)
+                menuBarState = .noData
+            }
             return
         }
 
         let available = liveSnapshots.filter { $0.usageStatus == .available }
-        let coolingDown = liveSnapshots.filter { $0.usageStatus == .coolingDown }
+        let waitingForReset = liveSnapshots.filter { shouldScheduleResetReadyNotification(snapshot: $0) }
 
         if available.isEmpty {
             // Nothing available — show countdown to soonest reset
-            let nextReset = coolingDown.compactMap(\.nextResetAt).min()
+            let nextReset = waitingForReset.compactMap(\.nextResetAt).min()
             menuBarState = .allCoolingDown(nextResetAt: nextReset)
             if let nextReset {
                 compactLabel = countdownString(until: nextReset, language: resolvedLanguage)
@@ -613,8 +601,10 @@ final class AppModel: ObservableObject {
     private func persist() {
         do {
             try store?.save(currentPersistedState)
+            persistenceErrorMessage = nil
         } catch {
             logger.error("Failed to persist state: \(error)")
+            presentPersistenceError(error)
         }
     }
 
@@ -624,16 +614,40 @@ final class AppModel: ObservableObject {
         }
 
         guard settings.cooldownNotificationsEnabled else {
-            notificationManager.cancelCooldownReadyNotification(accountName: account.displayName)
+            notificationManager.cancelCooldownReadyNotification(
+                accountId: account.id,
+                accountName: account.displayName
+            )
             return
         }
 
-        guard let nextResetAt = snapshot.nextResetAt else {
-            notificationManager.cancelCooldownReadyNotification(accountName: account.displayName)
+        guard shouldScheduleResetReadyNotification(snapshot: snapshot),
+              let nextResetAt = snapshot.nextResetAt else {
+            notificationManager.cancelCooldownReadyNotification(
+                accountId: account.id,
+                accountName: account.displayName
+            )
             return
         }
 
-        notificationManager.scheduleCooldownReadyNotification(accountName: account.displayName, at: nextResetAt)
+        notificationManager.scheduleCooldownReadyNotification(
+            accountId: account.id,
+            accountName: account.displayName,
+            at: nextResetAt
+        )
+    }
+
+    private func reconcileCooldownNotifications() {
+        for account in accounts {
+            if let snapshot = snapshot(for: account.id) {
+                scheduleNotificationIfNeeded(snapshot: snapshot, accountId: account.id)
+            } else {
+                notificationManager.cancelCooldownReadyNotification(
+                    accountId: account.id,
+                    accountName: account.displayName
+                )
+            }
+        }
     }
 
     private func reconcileRenewalReminders(for accountId: UUID) {
@@ -649,23 +663,30 @@ final class AppModel: ObservableObject {
     }
 
     private func reconcilePersistedNotifications() {
+        reconcileCooldownNotifications()
         for account in accounts {
-            if let snapshot = snapshot(for: account.id) {
-                scheduleNotificationIfNeeded(snapshot: snapshot, accountId: account.id)
-            } else {
-                notificationManager.cancelCooldownReadyNotification(accountName: account.displayName)
-            }
             reconcileRenewalReminders(for: account.id)
         }
     }
 
     private func cancelNotifications(for accounts: [Account]) {
         for account in accounts {
-            notificationManager.cancelCooldownReadyNotification(accountName: account.displayName)
+            notificationManager.cancelCooldownReadyNotification(
+                accountId: account.id,
+                accountName: account.displayName
+            )
             notificationManager.cancelNotifications(
                 withIdentifiers: renewalReminderScheduler.reminderIdentifiers(for: account.id)
             )
         }
+    }
+
+    private func storageErrorMessage(for details: String) -> String {
+        strings.localStorageError(details)
+    }
+
+    private func presentPersistenceError(_ error: any Error) {
+        persistenceErrorMessage = storageErrorMessage(for: error.localizedDescription)
     }
 
     private func upsertMetadata(for accountId: UUID, update: (inout AccountMetadata) -> Void) {
@@ -679,12 +700,6 @@ final class AppModel: ObservableObject {
             accountMetadata.append(metadata)
         }
         persist()
-    }
-
-    private func mostRecentlySyncedAccountId() -> UUID? {
-        snapshots.max { lhs, rhs in
-            (lhs.lastSyncedAt ?? .distantPast) < (rhs.lastSyncedAt ?? .distantPast)
-        }?.accountId
     }
 
     private func findAppByName(_ name: String) -> URL? {

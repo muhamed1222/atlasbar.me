@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let logger = Logger(subsystem: "me.atlasbar.LimitBar", category: "ClaudeWebViewUsageProvider")
 
 struct ClaudeWebViewUsageProvider: CurrentUsageProviding {
     private let credentialsReader: any ClaudeCredentialsReading
@@ -31,6 +34,7 @@ struct ClaudeWebViewUsageProvider: CurrentUsageProviding {
                 sessionPercentUsed: payload.fiveHour?.percentUsed,
                 weeklyPercentUsed: payload.sevenDay?.percentUsed,
                 nextResetAt: payload.fiveHour?.resetAt ?? payload.sevenDay?.resetAt,
+                weeklyResetAt: payload.sevenDay?.resetAt,
                 usageStatus: payload.usageStatus,
                 sourceConfidence: 0.98,
                 rawExtractedStrings: [],
@@ -40,6 +44,7 @@ struct ClaudeWebViewUsageProvider: CurrentUsageProviding {
             )
         }
 
+        logger.debug("WebView fetch failed or returned no valid payload, falling back to cookie provider")
         return await fallbackWebProvider?.fetchCurrentUsage()
     }
 }

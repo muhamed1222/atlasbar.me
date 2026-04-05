@@ -9,18 +9,18 @@ struct LimitBarApp: App {
         let notificationManager = NotificationManager()
         let claudeCookieStore = ClaudeSessionCookieStore()
         let claudeWebSessionController = ClaudeWebSessionController()
-        let claudeUsageProvider = ClaudeUsageCoordinator(
+        let claudeUsagePipeline = ClaudeUsagePipeline(
             webProvider: ClaudeWebViewUsageProvider(
                 sessionController: claudeWebSessionController,
                 fallbackWebProvider: ClaudeWebUsageProvider(cookieStore: claudeCookieStore)
             ),
-            localProvider: ClaudeUsageProvider()
+            webSessionController: claudeWebSessionController
         )
         self.notificationManager = notificationManager
         _appModel = StateObject(
             wrappedValue: AppModel(
                 notificationManager: notificationManager,
-                claudeUsageProvider: claudeUsageProvider,
+                claudeUsagePipeline: claudeUsagePipeline,
                 claudeSessionCookieStore: claudeCookieStore,
                 claudeWebSessionController: claudeWebSessionController
             )

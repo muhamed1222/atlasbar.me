@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let logger = Logger(subsystem: "me.atlasbar.LimitBar", category: "ClaudeWebUsageProvider")
 
 struct ClaudeWebUsageProvider: CurrentUsageProviding {
     typealias RequestPerformer = @Sendable (URLRequest) async throws -> (Data, URLResponse)
@@ -41,6 +44,9 @@ struct ClaudeWebUsageProvider: CurrentUsageProviding {
             let (data, response) = try await performRequest(request)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
+                if let httpResponse = response as? HTTPURLResponse {
+                    logger.warning("Claude usage API returned HTTP \(httpResponse.statusCode)")
+                }
                 return nil
             }
 
@@ -52,6 +58,7 @@ struct ClaudeWebUsageProvider: CurrentUsageProviding {
                 sessionPercentUsed: payload.fiveHour?.percentUsed,
                 weeklyPercentUsed: payload.sevenDay?.percentUsed,
                 nextResetAt: payload.fiveHour?.resetAt ?? payload.sevenDay?.resetAt,
+                weeklyResetAt: payload.sevenDay?.resetAt,
                 usageStatus: payload.usageStatus,
                 sourceConfidence: 0.95,
                 rawExtractedStrings: [],
@@ -60,6 +67,7 @@ struct ClaudeWebUsageProvider: CurrentUsageProviding {
                 totalTokensThisWeek: nil
             )
         } catch {
+            logger.warning("Failed to decode Claude usage response: \(error)")
             return nil
         }
     }
@@ -117,7 +125,7 @@ struct ClaudeUsageResponse: Decodable {
 }
 
 extension JSONDecoder {
-    static var claudeUsageDecoder: JSONDecoder {
+    static let claudeUsageDecoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -128,7 +136,7 @@ extension JSONDecoder {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid ISO-8601 date: \(value)")
         }
         return decoder
-    }
+    }()
 }
 
 func parseClaudeISO8601Date(_ value: String) -> Date? {

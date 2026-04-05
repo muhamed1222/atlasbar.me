@@ -34,7 +34,7 @@ private struct SequencedCurrentUsageProvider: CurrentUsageProviding {
     }
 }
 
-struct ClaudeUsageCoordinatorTests {
+struct ClaudeUsagePipelineTests {
     @Test
     func webProviderParsesClaudeUsageIntoPercents() async {
         let credentials = ClaudeCredentials(
@@ -97,12 +97,12 @@ struct ClaudeUsageCoordinatorTests {
             totalTokensToday: 12_000,
             totalTokensThisWeek: 54_000
         )
-        let coordinator = ClaudeUsageCoordinator(
-            webProvider: SequencedCurrentUsageProvider(result: nil),
-            localProvider: SequencedCurrentUsageProvider(result: local)
+        let pipeline = ClaudeUsagePipeline(
+            localProvider: SequencedCurrentUsageProvider(result: local),
+            webProvider: SequencedCurrentUsageProvider(result: nil)
         )
 
-        let payload = await coordinator.fetchCurrentUsage()
+        let payload = await pipeline.fetchCurrentUsage()
 
         #expect(payload == local)
     }
@@ -137,12 +137,12 @@ struct ClaudeUsageCoordinatorTests {
             totalTokensToday: nil,
             totalTokensThisWeek: nil
         )
-        let coordinator = ClaudeUsageCoordinator(
-            webProvider: SequencedCurrentUsageProvider(result: web),
-            localProvider: SequencedCurrentUsageProvider(result: local)
+        let pipeline = ClaudeUsagePipeline(
+            localProvider: SequencedCurrentUsageProvider(result: local),
+            webProvider: SequencedCurrentUsageProvider(result: web)
         )
 
-        let payload = await coordinator.fetchCurrentUsage()
+        let payload = await pipeline.fetchCurrentUsage()
 
         #expect(payload?.sessionPercentUsed == 31)
         #expect(payload?.weeklyPercentUsed == 58)

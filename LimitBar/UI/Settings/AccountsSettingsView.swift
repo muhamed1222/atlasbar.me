@@ -70,7 +70,7 @@ struct AccountsSettingsView: View {
                             detailRow(row.title, value: row.value)
                         }
 
-                        if account.provider == "Claude" {
+                        if account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame {
                             HStack {
                                 Text(strings.emailLabel)
                                 Spacer()
@@ -186,7 +186,7 @@ struct AccountsSettingsView: View {
             } else if let resetAccent = presentation.resetAccent {
                 Label(resetAccent.countdownText, systemImage: "timer")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(resetAccent.countdownTone.color)
                     .lineLimit(1)
             }
         }
@@ -253,7 +253,7 @@ struct AccountsSettingsView: View {
 
                 Text(accent.countdownText)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(accent.countdownTone.color)
 
                 Text(accent.summaryText)
                     .font(.caption)

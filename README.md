@@ -1,22 +1,24 @@
 # LimitBar
 
-macOS menu bar app for tracking Codex usage across accounts.
+macOS menu bar app for tracking Codex and Claude usage across accounts.
 
 ## What It Does
 
-- reads the current Codex account from `~/.codex/auth.json`
-- fetches usage data from the Codex/OpenAI usage endpoint
-- uses the `auth.json + API` path only; no Accessibility or UsageParser fallback
-- shows `Session` and `Weekly` remaining limits in the menu bar
-- keeps local snapshots and basic account state
+- tracks Codex accounts from `~/.codex/auth.json` and the Codex/OpenAI usage endpoint
+- tracks Claude accounts from a connected Claude web session when available, or from Claude local token logs as a fallback
+- stores local snapshots, per-account metadata, and cooldown timing
+- shows session and weekly limits in the menu bar and popover
+- supports switching between saved Codex accounts from the menu
+- schedules cooldown-ready and subscription renewal notifications
 
 ## Requirements
 
 - macOS 14 or newer
 - Xcode 16 or newer
-- Codex app installed
-- logged-in Codex account on the same Mac
-- no Accessibility permission is required for the current data path
+- Codex app installed for Codex account tracking and account switching
+- a logged-in Codex account on the same Mac if you want Codex usage
+- Claude Code or a Claude web session if you want Claude usage
+- no Accessibility permission is required for the current data paths
 
 ## Run On Another Mac
 
@@ -35,7 +37,7 @@ open LimitBar.xcodeproj
 
 3. In Xcode, select the `LimitBar` scheme and press `Run`.
 
-4. Open Codex and make sure you are logged in.
+4. Open Codex and make sure you are logged in if you want Codex data.
 
 LimitBar expects Codex to have already created:
 
@@ -43,12 +45,18 @@ LimitBar expects Codex to have already created:
 ~/.codex/auth.json
 ```
 
-Without that file, the app can launch, but account and usage data will not load.
+Without that file, the app can still launch, but Codex account and usage data will not load.
+
+If you also want Claude percentages:
+
+- connect Claude Web inside `Settings -> General -> Claude quota`, or
+- provide a Claude session cookie, or
+- let LimitBar fall back to local Claude token logs when available
 
 ## Notes
 
 - `.gitignore` does not block running the app on another Mac. It only excludes local machine artifacts like `DerivedData`, `xcuserdata`, and profiling files.
-- The repository does not include your local Codex auth file or tokens. That is intentional.
+- The repository does not include your local Codex auth file, Claude session cookie, or tokens. That is intentional.
 - Current development flow uses Xcode and `xcodegen`.
 
 ## Regenerate The Xcode Project
@@ -69,9 +77,9 @@ xcodebuild test -project LimitBar.xcodeproj -scheme LimitBar -destination 'platf
 
 This is an early working version focused on:
 
-- Codex account detection
-- usage fetching
+- Codex + Claude account detection
+- usage fetching and cooldown tracking
 - compact menu bar UI
-- local snapshot persistence
+- local snapshot persistence and account switching
 
 It is not yet packaged as a signed distributable `.app`.

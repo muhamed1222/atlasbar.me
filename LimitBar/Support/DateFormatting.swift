@@ -20,15 +20,57 @@ func countdownString(until date: Date, now: Date = .now, language: ResolvedAppLa
     if hours > 0 {
         return "\(hours)h \(minutes)m"
     }
+    if minutes == 0 {
+        return "<1m"
+    }
     return "\(minutes)m"
 }
 
+func hasFutureReset(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
+    guard let nextResetAt = snapshot.nextResetAt else { return false }
+    return nextResetAt.timeIntervalSince(now) > 0
+}
+
+func hasTrackedReset(snapshot: UsageSnapshot) -> Bool {
+    snapshot.nextResetAt != nil
+}
+
+func isAwaitingReset(snapshot: UsageSnapshot) -> Bool {
+    if let session = snapshot.sessionPercentUsed,
+       remainingPercent(from: session) <= 0 {
+        return true
+    }
+
+    switch snapshot.usageStatus {
+    case .coolingDown, .exhausted, .stale:
+        return true
+    case .available, .unknown:
+        return false
+    }
+}
+
+func isResetReady(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
+    guard let nextResetAt = snapshot.nextResetAt else { return false }
+    return nextResetAt.timeIntervalSince(now) <= 0
+}
+
+func shouldShowResetCountdown(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
+    guard hasFutureReset(snapshot: snapshot, now: now) else { return false }
+    return isAwaitingReset(snapshot: snapshot)
+}
+
+func shouldScheduleResetReadyNotification(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
+    guard hasFutureReset(snapshot: snapshot, now: now) else { return false }
+    return isAwaitingReset(snapshot: snapshot)
+}
+
 func shortUsageLabel(snapshot: UsageSnapshot, language: ResolvedAppLanguage = .english) -> String {
+    if shouldShowResetCountdown(snapshot: snapshot),
+       let nextResetAt = snapshot.nextResetAt {
+        return countdownString(until: nextResetAt, language: language)
+    }
     if snapshot.usageStatus == .stale {
         return UsageStatus.stale.displayLabel(language: language)
-    }
-    if let nextResetAt = snapshot.nextResetAt, snapshot.usageStatus == .coolingDown {
-        return countdownString(until: nextResetAt, language: language)
     }
     if let session = snapshot.sessionPercentUsed, let weekly = snapshot.weeklyPercentUsed {
         return "S\(Int(remainingPercent(from: session))) W\(Int(remainingPercent(from: weekly)))"

@@ -29,7 +29,7 @@ targets:
         CFBundleShortVersionString: "0.1.0"
         LSUIElement: YES
         NSPrincipalClass: NSApplication
-        NSUserNotificationUsageDescription: "LimitBar sends notifications when your Codex cooldown ends."
+        NSUserNotificationUsageDescription: "LimitBar sends notifications when tracked Codex or Claude accounts become available again or need renewal attention."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.atlasbar.LimitBar

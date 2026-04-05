@@ -3,10 +3,26 @@ import Foundation
 struct UsageStateProjection: Equatable {
     var accounts: [Account]
     var snapshots: [UsageSnapshot]
+    var accountMetadata: [AccountMetadata]
+    var settings: AppSettingsState
     var compactLabel: String
+
+    var persistedState: PersistedState {
+        PersistedState(
+            accounts: accounts,
+            snapshots: snapshots,
+            accountMetadata: accountMetadata,
+            settings: settings
+        )
+    }
 }
 
-struct UsageStateCoordinator {
+struct UsageStateLoadResult: Equatable {
+    var state: PersistedState
+    var persistenceError: String?
+}
+
+struct UsageStateCoordinator: Sendable {
     private let store: (any SnapshotStoring)?
     private let notificationManager: any NotificationScheduling
 
@@ -18,8 +34,9 @@ struct UsageStateCoordinator {
         self.notificationManager = notificationManager
     }
 
-    func loadInitialState() -> PersistedState {
+    func loadInitialState() -> UsageStateLoadResult {
         let loaded = store?.load() ?? PersistedState(accounts: [], snapshots: [])
+        var persistenceError: String? = store?.lastLoadIssue
         let normalized = normalizedLegacyAccounts(in: loaded)
         let persisted = PersistedState(
             accounts: deduplicated(normalized.accounts),
@@ -28,9 +45,17 @@ struct UsageStateCoordinator {
             settings: normalized.settings
         )
         if persisted != loaded {
-            try? store?.save(persisted)
+            do {
+                try store?.save(persisted)
+            } catch {
+                if let existingError = persistenceError, !existingError.isEmpty {
+                    persistenceError = existingError + "\n" + error.localizedDescription
+                } else {
+                    persistenceError = error.localizedDescription
+                }
+            }
         }
-        return persisted
+        return UsageStateLoadResult(state: persisted, persistenceError: persistenceError)
     }
 
     func resetAll() throws -> UsageStateProjection {
@@ -38,6 +63,8 @@ struct UsageStateCoordinator {
         return UsageStateProjection(
             accounts: [],
             snapshots: [],
+            accountMetadata: [],
+            settings: .default,
             compactLabel: "--"
         )
     }
@@ -58,6 +85,8 @@ struct UsageStateCoordinator {
         return UsageStateProjection(
             accounts: state.accounts,
             snapshots: snapshots,
+            accountMetadata: state.accountMetadata,
+            settings: state.settings,
             compactLabel: staleCompactLabel(from: snapshots)
         )
     }
@@ -76,6 +105,8 @@ struct UsageStateCoordinator {
             return UsageStateProjection(
                 accounts: state.accounts,
                 snapshots: state.snapshots,
+                accountMetadata: state.accountMetadata,
+                settings: state.settings,
                 compactLabel: compactLabel(from: state.accounts, snapshots: state.snapshots)
             )
         }
@@ -97,6 +128,52 @@ struct UsageStateCoordinator {
         return UsageStateProjection(
             accounts: state.accounts,
             snapshots: snapshots,
+            accountMetadata: state.accountMetadata,
+            settings: state.settings,
+            compactLabel: compactLabel(from: state.accounts, snapshots: snapshots)
+        )
+    }
+
+    func markAccountStale(
+        provider: String,
+        identifier: String?,
+        from state: PersistedState
+    ) throws -> UsageStateProjection {
+        let matchingAccountIds = Set(
+            state.accounts
+                .filter { $0.matchesIdentity(provider: provider, identifier: identifier) }
+                .map(\.id)
+        )
+
+        guard !matchingAccountIds.isEmpty else {
+            return UsageStateProjection(
+                accounts: state.accounts,
+                snapshots: state.snapshots,
+                accountMetadata: state.accountMetadata,
+                settings: state.settings,
+                compactLabel: compactLabel(from: state.accounts, snapshots: state.snapshots)
+            )
+        }
+
+        let snapshots = state.snapshots.map { snapshot in
+            guard matchingAccountIds.contains(snapshot.accountId) else { return snapshot }
+            var staleSnapshot = snapshot
+            staleSnapshot.usageStatus = .stale
+            return staleSnapshot
+        }
+
+        try persist(
+            accounts: state.accounts,
+            snapshots: snapshots,
+            accountMetadata: state.accountMetadata,
+            settings: state.settings
+        )
+
+        return UsageStateProjection(
+            accounts: state.accounts,
+            snapshots: snapshots,
+            accountMetadata: state.accountMetadata,
+            settings: state.settings,
             compactLabel: compactLabel(from: state.accounts, snapshots: snapshots)
         )
     }
@@ -105,7 +182,7 @@ struct UsageStateCoordinator {
         let accounts = state.accounts.filter { $0.id != account.id }
         let snapshots = state.snapshots.filter { $0.accountId != account.id }
         let accountMetadata = state.accountMetadata.filter { $0.accountId != account.id }
-        notificationManager.cancelCooldownReadyNotification(accountName: account.displayName)
+        notificationManager.cancelCooldownReadyNotification(accountId: account.id, accountName: account.displayName)
         try persist(
             accounts: accounts,
             snapshots: snapshots,
@@ -116,6 +193,8 @@ struct UsageStateCoordinator {
         return UsageStateProjection(
             accounts: accounts,
             snapshots: snapshots,
+            accountMetadata: accountMetadata,
+            settings: state.settings,
             compactLabel: compactLabel(from: accounts, snapshots: snapshots)
         )
     }
@@ -130,15 +209,17 @@ struct UsageStateCoordinator {
             provider: payload.provider,
             accounts: &accounts
         )
+        let previousSnapshot = state.snapshots.last(where: { $0.accountId == accountId })
 
         let snapshot = UsageSnapshot(
             id: UUID(),
             accountId: accountId,
             sessionPercentUsed: payload.sessionPercentUsed,
             weeklyPercentUsed: payload.weeklyPercentUsed,
-            nextResetAt: payload.nextResetAt,
+            nextResetAt: payload.nextResetAt ?? previousSnapshot?.nextResetAt,
+            weeklyResetAt: payload.weeklyResetAt ?? previousSnapshot?.weeklyResetAt,
             subscriptionExpiresAt: payload.subscriptionExpiresAt,
-            planType: payload.planType ?? state.snapshots.last(where: { $0.accountId == accountId })?.planType,
+            planType: payload.planType ?? previousSnapshot?.planType,
             usageStatus: payload.usageStatus,
             sourceConfidence: payload.sourceConfidence,
             lastSyncedAt: Date(),
@@ -181,6 +262,8 @@ struct UsageStateCoordinator {
         return UsageStateProjection(
             accounts: accounts,
             snapshots: snapshots,
+            accountMetadata: accountMetadata,
+            settings: state.settings,
             compactLabel: shortUsageLabel(snapshot: snapshot)
         )
     }
@@ -210,16 +293,21 @@ struct UsageStateCoordinator {
         guard let account = accounts.first(where: { $0.id == accountId }) else { return }
 
         guard settings.cooldownNotificationsEnabled else {
-            notificationManager.cancelCooldownReadyNotification(accountName: account.displayName)
+            notificationManager.cancelCooldownReadyNotification(accountId: account.id, accountName: account.displayName)
             return
         }
 
-        guard let nextResetAt = snapshot.nextResetAt else {
-            notificationManager.cancelCooldownReadyNotification(accountName: account.displayName)
+        guard shouldScheduleResetReadyNotification(snapshot: snapshot),
+              let nextResetAt = snapshot.nextResetAt else {
+            notificationManager.cancelCooldownReadyNotification(accountId: account.id, accountName: account.displayName)
             return
         }
 
-        notificationManager.scheduleCooldownReadyNotification(accountName: account.displayName, at: nextResetAt)
+        notificationManager.scheduleCooldownReadyNotification(
+            accountId: account.id,
+            accountName: account.displayName,
+            at: nextResetAt
+        )
     }
 
     private func compactLabel(from accounts: [Account], snapshots: [UsageSnapshot]) -> String {

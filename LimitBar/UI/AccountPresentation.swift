@@ -31,6 +31,7 @@ struct ResetAccentPresentation: Equatable {
     var countdownValue: String
     var timeText: String
     var summaryText: String
+    var countdownTone: PresentationTone
 }
 
 struct AccountRowPresentation: Equatable {
@@ -38,6 +39,7 @@ struct AccountRowPresentation: Equatable {
     var planLabel: String?
     var usageSummary: PresentationChip?
     var chips: [PresentationChip]
+    var sourceChip: PresentationChip?
     var statusChip: PresentationChip?
     var subscriptionChip: PresentationChip?
     var resetAccent: ResetAccentPresentation?
@@ -73,6 +75,13 @@ struct AccountDetailPresentation: Equatable {
     var noteCharacterCount: String
 }
 
+enum DataQualityState: Equatable {
+    case live
+    case cached
+    case stale
+    case localOnly
+}
+
 func makeAccountRowPresentation(
     account: Account,
     snapshot: UsageSnapshot?,
@@ -82,6 +91,7 @@ func makeAccountRowPresentation(
 ) -> AccountRowPresentation {
     let strings = AppStrings(language: language)
     let statusChip = rowStatusChip(for: snapshot, language: language)
+    let sourceChip = dataQualityChip(for: account, snapshot: snapshot, language: language)
     let rowSubscriptionChip: PresentationChip? = snapshot.flatMap { item in
         subscriptionChip(for: item, now: now, language: language)
     }
@@ -100,17 +110,23 @@ func makeAccountRowPresentation(
     let resetAccent = resetAccent(for: snapshot, now: now, language: language)
 
     if let snapshot {
-        chips.append(
-            PresentationChip(
-                text: snapshot.usageStatus.displayLabel(language: language),
-                tone: tone(for: snapshot.usageStatus),
-                style: .filled
+        if let sourceChip {
+            chips.append(sourceChip)
+        }
+
+        if shouldIncludeUsageStatusBadge(snapshot) {
+            chips.append(
+                PresentationChip(
+                    text: snapshot.usageStatus.displayLabel(language: language),
+                    tone: tone(for: snapshot.usageStatus),
+                    style: .filled
+                )
             )
-        )
+        }
 
         if resetAccent == nil,
-           let nextResetAt = snapshot.nextResetAt,
-           snapshot.usageStatus == .coolingDown {
+           shouldShowResetCountdown(snapshot: snapshot, now: now),
+           let nextResetAt = snapshot.nextResetAt {
             chips.append(
                 PresentationChip(
                     text: countdownString(until: nextResetAt, now: now, language: language),
@@ -134,7 +150,7 @@ func makeAccountRowPresentation(
     }
 
     var tokenSyncText: String? = syncText
-    if account.provider == "Claude", let snapshot {
+    if account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame, let snapshot {
         if let tokensToday = snapshot.totalTokensToday {
             let formatted = strings.formattedTokens(tokensToday)
             tokenSyncText = "\(strings.tokensToday): \(formatted)"
@@ -146,6 +162,7 @@ func makeAccountRowPresentation(
         planLabel: planBadgeText(for: snapshot?.planType),
         usageSummary: usageSummary,
         chips: chips,
+        sourceChip: sourceChip,
         statusChip: statusChip,
         subscriptionChip: rowSubscriptionChip,
         resetAccent: resetAccent,
@@ -169,13 +186,19 @@ func makeAccountsListRowPresentation(
     ]
 
     if let snapshot {
-        chips.append(
-            PresentationChip(
-                text: snapshot.usageStatus.displayLabel(language: language),
-                tone: tone(for: snapshot.usageStatus),
-                style: .filled
+        if let sourceChip = dataQualityChip(for: account, snapshot: snapshot, language: language) {
+            chips.append(sourceChip)
+        }
+
+        if shouldIncludeUsageStatusBadge(snapshot) {
+            chips.append(
+                PresentationChip(
+                    text: snapshot.usageStatus.displayLabel(language: language),
+                    tone: tone(for: snapshot.usageStatus),
+                    style: .filled
+                )
             )
-        )
+        }
 
         if let chip = subscriptionChip(for: snapshot, now: now, language: language) {
             chips.append(chip)
@@ -225,13 +248,19 @@ func makeAccountDetailPresentation(
 
     var summaryChips: [PresentationChip] = []
     if let snapshot {
-        summaryChips.append(
-            PresentationChip(
-                text: snapshot.usageStatus.displayLabel(language: language),
-                tone: tone(for: snapshot.usageStatus),
-                style: .filled
+        if let sourceChip = dataQualityChip(for: account, snapshot: snapshot, language: language) {
+            summaryChips.append(sourceChip)
+        }
+
+        if shouldIncludeUsageStatusBadge(snapshot) {
+            summaryChips.append(
+                PresentationChip(
+                    text: snapshot.usageStatus.displayLabel(language: language),
+                    tone: tone(for: snapshot.usageStatus),
+                    style: .filled
+                )
             )
-        )
+        }
     } else {
         summaryChips.append(PresentationChip(text: strings.unknownStatus, tone: .secondary, style: .outlined))
     }
@@ -277,28 +306,41 @@ private func usageBarsPresentation(snapshot: UsageSnapshot?) -> [UsageBarPresent
 }
 
 private func usageSummaryText(for snapshot: UsageSnapshot, now: Date, language: ResolvedAppLanguage) -> String {
-    if let nextResetAt = snapshot.nextResetAt, snapshot.usageStatus == .coolingDown {
+    if shouldShowResetCountdown(snapshot: snapshot, now: now),
+       let nextResetAt = snapshot.nextResetAt {
         return countdownString(until: nextResetAt, now: now, language: language)
     }
     return shortUsageLabel(snapshot: snapshot, language: language)
 }
 
 private func resetAccent(for snapshot: UsageSnapshot?, now: Date, language: ResolvedAppLanguage) -> ResetAccentPresentation? {
-    guard let nextResetAt = snapshot?.nextResetAt,
-          isResetSoon(nextResetAt, now: now) else {
+    guard let nextResetAt = snapshot?.nextResetAt else {
         return nil
     }
 
     let strings = AppStrings(language: language)
+    let timeText = localizedTimeOfDay(nextResetAt, language: language)
+
+    if nextResetAt.timeIntervalSince(now) <= 0 {
+        return ResetAccentPresentation(
+            title: strings.sessionReset,
+            countdownText: strings.ready,
+            countdownValue: strings.ready,
+            timeText: timeText,
+            summaryText: strings.sessionResetReadySummary(time: timeText),
+            countdownTone: .green
+        )
+    }
+
     let countdown = resetCountdownString(until: nextResetAt, now: now, language: language)
     let countdownText = strings.resetsIn(countdown)
-    let timeText = localizedTimeOfDay(nextResetAt, language: language)
     return ResetAccentPresentation(
         title: strings.sessionReset,
         countdownText: countdownText,
         countdownValue: countdown,
         timeText: timeText,
-        summaryText: strings.sessionResetSummary(time: timeText, countdown: countdown)
+        summaryText: strings.sessionResetSummary(time: timeText, countdown: countdown),
+        countdownTone: .orange
     )
 }
 
@@ -322,11 +364,6 @@ private func subscriptionChip(for snapshot: UsageSnapshot, now: Date, language: 
     case .unknown:
         return nil
     }
-}
-
-private func isResetSoon(_ date: Date, now: Date) -> Bool {
-    let interval = date.timeIntervalSince(now)
-    return interval > 0 && interval <= 24 * 60 * 60
 }
 
 private func resetCountdownString(until date: Date, now: Date, language: ResolvedAppLanguage) -> String {
@@ -382,6 +419,50 @@ private func subscriptionText(for snapshot: UsageSnapshot?, now: Date, language:
     }
 }
 
+private func dataQualityChip(
+    for account: Account,
+    snapshot: UsageSnapshot?,
+    language: ResolvedAppLanguage
+) -> PresentationChip? {
+    guard let snapshot,
+          let quality = dataQualityState(for: account, snapshot: snapshot) else {
+        return nil
+    }
+
+    let strings = AppStrings(language: language)
+    return PresentationChip(
+        text: strings.dataQualityLabel(quality),
+        tone: tone(for: quality),
+        style: .outlined
+    )
+}
+
+private func dataQualityState(for account: Account, snapshot: UsageSnapshot) -> DataQualityState? {
+    if snapshot.usageStatus == .stale {
+        return .stale
+    }
+
+    if isLocalOnlySnapshot(account: account, snapshot: snapshot) {
+        return .localOnly
+    }
+
+    if snapshot.sourceConfidence < 0.95 {
+        return .cached
+    }
+
+    return .live
+}
+
+private func isLocalOnlySnapshot(account: Account, snapshot: UsageSnapshot) -> Bool {
+    guard account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame else {
+        return false
+    }
+
+    let hasTokenActivity = snapshot.totalTokensToday != nil || snapshot.totalTokensThisWeek != nil
+    let hasQuotaData = snapshot.sessionPercentUsed != nil || snapshot.weeklyPercentUsed != nil
+    return hasTokenActivity && !hasQuotaData
+}
+
 private func planBadgeText(for rawPlanType: String?) -> String? {
     guard let rawPlanType = rawPlanType?.trimmingCharacters(in: .whitespacesAndNewlines),
           !rawPlanType.isEmpty else {
@@ -401,7 +482,7 @@ private func planBadgeText(for rawPlanType: String?) -> String? {
     if normalized.contains("pro") {
         return "Pro"
     }
-    if normalized == "go" || normalized.contains("go") {
+    if normalized == "go" {
         return "Go"
     }
     if normalized.contains("free") {
@@ -416,7 +497,7 @@ private func rowStatusChip(for snapshot: UsageSnapshot?, language: ResolvedAppLa
         return nil
     }
 
-    guard snapshot.usageStatus != .available else {
+    guard snapshot.usageStatus != .available, snapshot.usageStatus != .stale else {
         return nil
     }
 
@@ -425,6 +506,10 @@ private func rowStatusChip(for snapshot: UsageSnapshot?, language: ResolvedAppLa
         tone: tone(for: snapshot.usageStatus),
         style: .filled
     )
+}
+
+private func shouldIncludeUsageStatusBadge(_ snapshot: UsageSnapshot) -> Bool {
+    snapshot.usageStatus != .stale
 }
 
 private func tone(for status: UsageStatus) -> PresentationTone {
@@ -437,5 +522,18 @@ private func tone(for status: UsageStatus) -> PresentationTone {
         return .red
     case .unknown, .stale:
         return .secondary
+    }
+}
+
+private func tone(for quality: DataQualityState) -> PresentationTone {
+    switch quality {
+    case .live:
+        return .green
+    case .cached:
+        return .orange
+    case .stale:
+        return .secondary
+    case .localOnly:
+        return .blue
     }
 }

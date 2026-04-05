@@ -1,8 +1,16 @@
 import SwiftUI
 
+func accountsSectionMaxHeight(for accountCount: Int) -> CGFloat {
+    let visibleRows = min(max(accountCount, 1), 3)
+    let estimatedRowHeight: CGFloat = 112
+    let estimatedSpacing: CGFloat = 4
+    return (CGFloat(visibleRows) * estimatedRowHeight) + (CGFloat(max(visibleRows - 1, 0)) * estimatedSpacing)
+}
+
 struct MenuBarRootView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var accountPendingDeletion: Account?
+    @State private var isShowingDeleteConfirmation = false
 
     var body: some View {
         let strings = appModel.strings
@@ -26,19 +34,18 @@ struct MenuBarRootView: View {
         )
         .confirmationDialog(
             strings.deleteAccountTitle,
-            isPresented: Binding(
-                get: { accountPendingDeletion != nil },
-                set: { if !$0 { accountPendingDeletion = nil } }
-            ),
+            isPresented: $isShowingDeleteConfirmation,
             titleVisibility: .visible
         ) {
             Button(strings.delete, role: .destructive) {
                 guard let accountPendingDeletion else { return }
                 appModel.deleteAccount(accountPendingDeletion)
                 self.accountPendingDeletion = nil
+                isShowingDeleteConfirmation = false
             }
             Button(strings.cancel, role: .cancel) {
                 accountPendingDeletion = nil
+                isShowingDeleteConfirmation = false
             }
         } message: {
             Text(accountPendingDeletion?.displayName ?? strings.account)
@@ -60,6 +67,18 @@ struct MenuBarRootView: View {
                 Text(appModel.strings.updated(localizedRelativeDate(lastRefreshAt, language: appModel.resolvedLanguage)))
                     .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
+            }
+            if let persistenceErrorMessage = appModel.persistenceErrorMessage, !persistenceErrorMessage.isEmpty {
+                Text(persistenceErrorMessage)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let switchErrorMessage = appModel.switchErrorMessage, !switchErrorMessage.isEmpty {
+                Text(switchErrorMessage)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 10)
@@ -96,7 +115,10 @@ struct MenuBarRootView: View {
                                 metadata: metadata,
                                 isActive: appModel.isActiveCodexAccount(account),
                                 canSwitch: appModel.canSwitch(to: account),
-                                onDelete: { accountPendingDeletion = account },
+                                onDelete: {
+                                    accountPendingDeletion = account
+                                    isShowingDeleteConfirmation = true
+                                },
                                 onSwitch: { appModel.switchToAccount(account) },
                                 language: appModel.resolvedLanguage
                             )
@@ -105,7 +127,7 @@ struct MenuBarRootView: View {
                     }
                     .padding(.vertical, 2)
                 }
-                .frame(maxHeight: 236)
+                .frame(maxHeight: accountsSectionMaxHeight(for: appModel.sortedAccounts.count))
             }
         }
     }

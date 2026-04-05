@@ -7,10 +7,10 @@ protocol UserNotificationCentering: AnyObject, Sendable {
     func removePendingNotificationRequests(withIdentifiers identifiers: [String])
 }
 
-protocol NotificationScheduling: RenewalNotificationScheduling, AnyObject {
+protocol NotificationScheduling: RenewalNotificationScheduling, AnyObject, Sendable {
     func requestAuthorization() async -> Bool
-    func scheduleCooldownReadyNotification(accountName: String, at date: Date)
-    func cancelCooldownReadyNotification(accountName: String)
+    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date)
+    func cancelCooldownReadyNotification(accountId: UUID, accountName: String)
 }
 
 private actor NotificationAuthorizationCoordinator {
@@ -48,7 +48,7 @@ private actor NotificationAuthorizationCoordinator {
     }
 }
 
-final class NotificationManager: NotificationScheduling {
+final class NotificationManager: @unchecked Sendable, NotificationScheduling {
     private let center: any UserNotificationCentering
     private let authorizationCoordinator: NotificationAuthorizationCoordinator
 
@@ -61,25 +61,30 @@ final class NotificationManager: NotificationScheduling {
         await authorizationCoordinator.requestAuthorization()
     }
 
-    func scheduleCooldownReadyNotification(accountName: String, at date: Date) {
-        let identifier = cooldownIdentifier(for: accountName)
+    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date) {
+        let identifier = cooldownIdentifier(for: accountId)
         scheduleNotification(
             identifier: identifier,
             title: "Account available again",
-            body: "\(accountName) should be ready to use.",
+            body: "One of your tracked accounts should be ready to use.",
             at: date
         )
     }
 
-    func cancelCooldownReadyNotification(accountName: String) {
-        center.removePendingNotificationRequests(withIdentifiers: [cooldownIdentifier(for: accountName)])
+    func cancelCooldownReadyNotification(accountId: UUID, accountName: String) {
+        center.removePendingNotificationRequests(
+            withIdentifiers: [
+                cooldownIdentifier(for: accountId),
+                legacyCooldownIdentifier(for: accountName)
+            ]
+        )
     }
 
     func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {
         scheduleNotification(
             identifier: identifier,
             title: "Subscription renewal reminder",
-            body: "\(accountName) expires soon.",
+            body: "One of your tracked accounts expires soon.",
             at: date
         )
     }
@@ -117,7 +122,11 @@ final class NotificationManager: NotificationScheduling {
         }
     }
 
-    private func cooldownIdentifier(for accountName: String) -> String {
+    private func cooldownIdentifier(for accountId: UUID) -> String {
+        "cooldown-\(accountId.uuidString.lowercased())"
+    }
+
+    private func legacyCooldownIdentifier(for accountName: String) -> String {
         "cooldown-\(accountName.replacingOccurrences(of: " ", with: "-"))"
     }
 }

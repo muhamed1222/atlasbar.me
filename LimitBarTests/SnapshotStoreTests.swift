@@ -42,8 +42,10 @@ struct SnapshotStoreTests {
             sessionPercentUsed: 42,
             weeklyPercentUsed: 70,
             nextResetAt: nil,
+            weeklyResetAt: Date(timeIntervalSince1970: 1_700_123_456),
             subscriptionExpiresAt: nil,
             usageStatus: .available,
+            stateOrigin: .predictedReset,
             sourceConfidence: 0.8,
             lastSyncedAt: Date(),
             rawExtractedStrings: ["42%"]
@@ -53,7 +55,68 @@ struct SnapshotStoreTests {
         let loaded = store.load()
         #expect(loaded.snapshots.count == 1)
         #expect(loaded.snapshots.first?.sessionPercentUsed == 42)
+        #expect(loaded.snapshots.first?.weeklyResetAt == Date(timeIntervalSince1970: 1_700_123_456))
+        #expect(loaded.snapshots.first?.stateOrigin == .predictedReset)
         #expect(loaded.snapshots.first?.rawExtractedStrings.isEmpty == true)
+    }
+
+    @Test
+    func legacySnapshotPayloadWithoutStateOriginDefaultsToServer() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LimitBarLegacySnapshot-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        let legacyStore = try SnapshotStore(directory: url)
+        let legacyPayload = """
+        {
+          "accounts" : [ ],
+          "snapshots" : [
+            {
+              "accountId" : "\(UUID().uuidString)",
+              "id" : "\(UUID().uuidString)",
+              "sourceConfidence" : 0.5,
+              "usageStatus" : "available"
+            }
+          ]
+        }
+        """
+        try legacyPayload.data(using: .utf8)?.write(
+            to: url.appendingPathComponent("state.json"),
+            options: .atomic
+        )
+
+        let loaded = legacyStore.load()
+        #expect(loaded.snapshots.count == 1)
+        #expect(loaded.snapshots.first?.stateOrigin == .server)
+    }
+
+    @Test
+    func unknownStateOriginFallsBackToServer() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LimitBarUnknownStateOrigin-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        let legacyStore = try SnapshotStore(directory: url)
+        let payload = """
+        {
+          "accounts" : [ ],
+          "snapshots" : [
+            {
+              "accountId" : "\(UUID().uuidString)",
+              "id" : "\(UUID().uuidString)",
+              "sourceConfidence" : 0.5,
+              "stateOrigin" : "mystery",
+              "usageStatus" : "available"
+            }
+          ]
+        }
+        """
+        try payload.data(using: .utf8)?.write(
+            to: url.appendingPathComponent("state.json"),
+            options: .atomic
+        )
+
+        let loaded = legacyStore.load()
+        #expect(loaded.snapshots.count == 1)
+        #expect(loaded.snapshots.first?.stateOrigin == .server)
     }
 
     @Test

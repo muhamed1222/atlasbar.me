@@ -55,6 +55,15 @@ struct AppStrings {
     var polling: String { tr(en: "Polling", ru: "Опрос") }
     var languageTitle: String { tr(en: "Language", ru: "Язык") }
     var appLanguage: String { tr(en: "App language", ru: "Язык приложения") }
+    var localStorageErrorTitle: String { tr(en: "Storage issue", ru: "Проблема с хранилищем") }
+    var accountSwitchErrorTitle: String { tr(en: "Account switching", ru: "Переключение аккаунта") }
+    var trackingSourcesTitle: String { tr(en: "Tracking sources", ru: "Источники данных") }
+    var trackingSourcesDescription: String {
+        tr(
+            en: "LimitBar reads Codex usage from ~/.codex/auth.json and the usage API. Claude usage comes from a connected Claude web session when available, or falls back to a saved Claude cookie and local token logs.",
+            ru: "LimitBar читает usage Codex через ~/.codex/auth.json и usage API. Данные Claude берутся из подключённой web-сессии Claude, а при необходимости откатываются к сохранённому cookie и локальным token-логам."
+        )
+    }
     var status: String { tr(en: "Status", ru: "Статус") }
     var save: String { tr(en: "Save", ru: "Сохранить") }
     var clear: String { tr(en: "Clear", ru: "Очистить") }
@@ -105,6 +114,8 @@ struct AppStrings {
     var account: String { tr(en: "Account", ru: "Аккаунт") }
     var provider: String { tr(en: "Provider", ru: "Провайдер") }
     var subscription: String { tr(en: "Subscription", ru: "Подписка") }
+    var dailyReset: String { tr(en: "Daily", ru: "Ежедневная") }
+    var weeklyReset: String { tr(en: "Weekly", ru: "Еженедельная") }
     var reset: String { tr(en: "Reset", ru: "Сброс") }
     var time: String { tr(en: "Time", ru: "Время") }
     var lastSync: String { tr(en: "Last sync", ru: "Последняя синхронизация") }
@@ -133,8 +144,8 @@ struct AppStrings {
     var staleSyncedSeparator: String { tr(en: "Stale ·", ru: "Устарело ·") }
     var ready: String { tr(en: "Ready", ru: "Готово") }
     var offline: String { tr(en: "Offline", ru: "Офлайн") }
-    var openCodexToStartTracking: String { tr(en: "Open Codex to start tracking", ru: "Откройте Codex, чтобы начать отслеживание") }
-    var readingUsageData: String { tr(en: "Reading usage data…", ru: "Читаю usage-данные…") }
+    var openCodexToStartTracking: String { tr(en: "Open Codex or connect Claude to start tracking", ru: "Откройте Codex или подключите Claude, чтобы начать отслеживание") }
+    var readingUsageData: String { tr(en: "Reading Codex and Claude usage…", ru: "Читаю usage-данные Codex и Claude…") }
     var refreshNow: String { tr(en: "Refresh now", ru: "Обновить сейчас") }
     var openCodex: String { tr(en: "Open Codex", ru: "Открыть Codex") }
     var settings: String { tr(en: "Settings…", ru: "Настройки…") }
@@ -193,6 +204,13 @@ struct AppStrings {
         }
     }
 
+    func localStorageError(_ details: String) -> String {
+        tr(
+            en: "LimitBar found a local storage issue: \(details)",
+            ru: "LimitBar обнаружил проблему с локальным хранилищем: \(details)"
+        )
+    }
+
     func statusLabel(_ status: UsageStatus) -> String {
         switch (language, status) {
         case (.english, .available):
@@ -215,6 +233,27 @@ struct AppStrings {
             return "Неизвестно"
         case (.russian, .stale):
             return "Устарел"
+        }
+    }
+
+    func dataQualityLabel(_ quality: DataQualityState) -> String {
+        switch (language, quality) {
+        case (.english, .live):
+            return "Live"
+        case (.english, .cached):
+            return "Cached"
+        case (.english, .stale):
+            return "Stale"
+        case (.english, .localOnly):
+            return "Local only"
+        case (.russian, .live):
+            return "Актуально"
+        case (.russian, .cached):
+            return "Кэш"
+        case (.russian, .stale):
+            return "Устарело"
+        case (.russian, .localOnly):
+            return "Локально"
         }
     }
 
@@ -284,6 +323,13 @@ struct AppStrings {
         tr(
             en: "Session reset at \(time) (in \(countdown))",
             ru: "Сброс сессии в \(time) (через \(countdown))"
+        )
+    }
+
+    func sessionResetReadySummary(time: String) -> String {
+        tr(
+            en: "Session reset at \(time) (ready)",
+            ru: "Сброс сессии в \(time) (готово)"
         )
     }
 

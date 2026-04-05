@@ -4,6 +4,7 @@ struct CodexUsageData: Sendable {
     var sessionPercentUsed: Double?
     var weeklyPercentUsed: Double?
     var nextResetAt: Date?
+    var weeklyResetAt: Date? = nil
     var status: UsageStatus
 }
 
@@ -14,6 +15,7 @@ struct CurrentUsagePayload: Equatable, Sendable {
     var sessionPercentUsed: Double?
     var weeklyPercentUsed: Double?
     var nextResetAt: Date?
+    var weeklyResetAt: Date? = nil
     var usageStatus: UsageStatus
     var sourceConfidence: Double
     var rawExtractedStrings: [String]
@@ -25,6 +27,7 @@ struct CurrentUsagePayload: Equatable, Sendable {
         sessionPercentUsed != nil
             || weeklyPercentUsed != nil
             || nextResetAt != nil
+            || weeklyResetAt != nil
             || usageStatus != .unknown
     }
 
@@ -48,6 +51,7 @@ struct CurrentUsagePayload: Equatable, Sendable {
             sessionPercentUsed: sessionPercentUsed,
             weeklyPercentUsed: weeklyPercentUsed,
             nextResetAt: nextResetAt,
+            weeklyResetAt: weeklyResetAt,
             usageStatus: usageStatus,
             sourceConfidence: sourceConfidence,
             rawExtractedStrings: rawExtractedStrings,

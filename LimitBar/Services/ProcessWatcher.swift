@@ -1,6 +1,6 @@
 import AppKit
 
-protocol CodexRunningChecking {
+protocol CodexRunningChecking: Sendable {
     var isCodexRunning: Bool { get }
 }
 

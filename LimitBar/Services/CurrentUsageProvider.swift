@@ -35,6 +35,7 @@ struct APIBasedUsageProvider: CurrentUsageProviding {
             sessionPercentUsed: usageData?.sessionPercentUsed,
             weeklyPercentUsed: usageData?.weeklyPercentUsed,
             nextResetAt: usageData?.nextResetAt,
+            weeklyResetAt: usageData?.weeklyResetAt,
             usageStatus: usageData?.status ?? .unknown,
             sourceConfidence: usageData != nil ? 1.0 : 0.0,
             rawExtractedStrings: []

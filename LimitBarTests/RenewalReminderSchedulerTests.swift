@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import LimitBar
 
-private final class RenewalNotificationManagerSpy: RenewalNotificationScheduling {
+private final class RenewalNotificationManagerSpy: @unchecked Sendable, RenewalNotificationScheduling {
     var scheduled: [RenewalReminderRequest] = []
     var cancelledIdentifiers: [String] = []
 

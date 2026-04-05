@@ -12,6 +12,7 @@ struct AccountRowView: View {
     private let detailRowHeight: CGFloat = 24
     private let detailRowSpacing: CGFloat = 3
     private let metricsBlockPadding: CGFloat = 3
+    private let detailTitleWidth: CGFloat = 84
 
     private var metricsBlockHeight: CGFloat {
         (detailRowHeight * 3) + (detailRowSpacing * 2) + (metricsBlockPadding * 2)
@@ -47,11 +48,15 @@ struct AccountRowView: View {
             || presentation.syncText != nil
     }
 
+    private var hasSummaryChips: Bool {
+        presentation.statusChip != nil || presentation.sourceChip != nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             headerLine
 
-            if presentation.statusChip != nil {
+            if hasSummaryChips {
                 summaryLine
             }
 
@@ -103,6 +108,9 @@ struct AccountRowView: View {
 
     private var summaryLine: some View {
         HStack(spacing: 4) {
+            if let sourceChip = presentation.sourceChip {
+                chip(sourceChip, softened: presentation.statusChip != nil)
+            }
             if let statusChip = presentation.statusChip {
                 chip(statusChip)
             }
@@ -110,7 +118,7 @@ struct AccountRowView: View {
     }
 
     private var metricsLine: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .top, spacing: 8) {
             if sessionUsage != nil || weeklyUsage != nil {
                 gaugeCluster
             } else if let tokenDials = claudeTokenDials {
@@ -120,12 +128,12 @@ struct AccountRowView: View {
             VStack(alignment: .leading, spacing: 5) {
                 timeDetailsBlock
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 
     private var claudeTokenDials: (today: Int, week: Int)? {
-        guard account.provider == "Claude",
+        guard account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame,
               let today = presentation.totalTokensToday,
               let week = presentation.totalTokensThisWeek,
               week > 0 else { return nil }
@@ -217,32 +225,36 @@ struct AccountRowView: View {
 
     private var timeDetailsBlock: some View {
         VStack(alignment: .leading, spacing: detailRowSpacing) {
-            if let resetAccent = presentation.resetAccent {
-                detailRow(
-                    title: strings.reset,
-                    value: resetAccent.countdownValue,
-                    tone: .orange
-                )
+            if sessionUsage != nil || weeklyUsage != nil {
+                quotaScheduleBlock
+            } else {
+                if let resetAccent = presentation.resetAccent {
+                    detailRow(
+                        title: strings.reset,
+                        value: resetAccent.countdownValue,
+                        tone: resetAccent.countdownTone.color
+                    )
 
-                detailRow(
-                    title: strings.time,
-                    value: resetAccent.timeText,
-                    tone: .secondary
-                )
-            }
+                    detailRow(
+                        title: strings.time,
+                        value: resetAccent.timeText,
+                        tone: .secondary
+                    )
+                }
 
-            if let subscriptionValueText {
-                detailRow(
-                    title: strings.subscription,
-                    value: subscriptionValueText,
-                    tone: presentation.subscriptionChip?.tone.color ?? .secondary
-                )
-            } else if presentation.resetAccent == nil, let statusChip = presentation.statusChip {
-                detailRow(
-                    title: strings.account,
-                    value: statusChip.text,
-                    tone: statusChip.tone.color
-                )
+                if let subscriptionValueText {
+                    detailRow(
+                        title: strings.subscription,
+                        value: subscriptionValueText,
+                        tone: presentation.subscriptionChip?.tone.color ?? .secondary
+                    )
+                } else if presentation.resetAccent == nil, let statusChip = presentation.statusChip {
+                    detailRow(
+                        title: strings.account,
+                        value: statusChip.text,
+                        tone: statusChip.tone.color
+                    )
+                }
             }
 
             if sessionUsage == nil, weeklyUsage == nil,
@@ -272,11 +284,46 @@ struct AccountRowView: View {
         }
         .padding(.horizontal, metricsBlockPadding)
         .padding(.vertical, metricsBlockPadding)
-        .frame(height: metricsBlockHeight)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.primary.opacity(0.028))
         )
+    }
+
+    private var quotaScheduleBlock: some View {
+        Group {
+            detailRow(
+                title: strings.dailyReset,
+                value: dailyResetValueText,
+                tone: .secondary
+            )
+
+            detailRow(
+                title: strings.weeklyReset,
+                value: weeklyResetValueText,
+                tone: .secondary
+            )
+
+            detailRow(
+                title: strings.subscription,
+                value: subscriptionValueText ?? "--",
+                tone: presentation.subscriptionChip?.tone.color ?? .secondary
+            )
+        }
+    }
+
+    private var dailyResetValueText: String {
+        guard let nextResetAt = snapshot?.nextResetAt else {
+            return "--"
+        }
+        return localizedTimeOfDay(nextResetAt, language: language)
+    }
+
+    private var weeklyResetValueText: String {
+        guard let weeklyResetAt = snapshot?.weeklyResetAt else {
+            return "--"
+        }
+        return localizedMonthDay(weeklyResetAt, language: language)
     }
 
     private var subscriptionValueText: String? {
@@ -396,7 +443,9 @@ struct AccountRowView: View {
             Text(title)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 66, alignment: .leading)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .frame(width: detailTitleWidth, alignment: .leading)
 
             Spacer(minLength: 0)
 

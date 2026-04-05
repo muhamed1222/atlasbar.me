@@ -42,18 +42,36 @@ struct PersistedState: Codable, Equatable {
     }
 }
 
-protocol SnapshotStoring: AnyObject {
+protocol SnapshotStoring: AnyObject, Sendable {
+    var lastLoadIssue: String? { get }
     func load() -> PersistedState
     func save(_ state: PersistedState) throws
     func reset() throws
 }
 
-final class SnapshotStore {
+enum SnapshotStoreLoadIssue: LocalizedError {
+    case corruptedStateRecovered(backupFilename: String)
+    case corruptedStateRecoveryFailed(details: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .corruptedStateRecovered(let backupFilename):
+            return "Local state was corrupted and moved to \(backupFilename). LimitBar started with a clean state."
+        case .corruptedStateRecoveryFailed(let details):
+            return "Local state was corrupted and could not be recovered safely: \(details)"
+        }
+    }
+}
+
+final class SnapshotStore: @unchecked Sendable {
+    private let fileManager: FileManager
     private let url: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private(set) var lastLoadIssue: String?
 
     init(fileManager: FileManager = .default) throws {
+        self.fileManager = fileManager
         let appSupport = try fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -68,7 +86,8 @@ final class SnapshotStore {
     }
 
     init(directory: URL) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        self.fileManager = .default
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         self.url = directory.appendingPathComponent("state.json")
         self.encoder = Self.makeEncoder()
         self.decoder = Self.makeDecoder()
@@ -88,20 +107,47 @@ final class SnapshotStore {
     }
 
     func load() -> PersistedState {
+        lastLoadIssue = nil
         guard let data = try? Data(contentsOf: url) else {
             return PersistedState(accounts: [], snapshots: [])
         }
-        return (try? decoder.decode(PersistedState.self, from: data))
-            ?? PersistedState(accounts: [], snapshots: [])
+        do {
+            return try decoder.decode(PersistedState.self, from: data)
+        } catch {
+            lastLoadIssue = recoverCorruptedStateFile(after: error)
+            return PersistedState(accounts: [], snapshots: [])
+        }
     }
 
     func save(_ state: PersistedState) throws {
         let data = try encoder.encode(state)
         try data.write(to: url, options: .atomic)
+        lastLoadIssue = nil
     }
 
     func reset() throws {
         try save(PersistedState(accounts: [], snapshots: []))
+    }
+
+    private func recoverCorruptedStateFile(after error: any Error) -> String {
+        let timestamp = ISO8601DateFormatter().string(from: .now)
+            .replacingOccurrences(of: ":", with: "-")
+        let backupURL = url.deletingLastPathComponent()
+            .appendingPathComponent("state.corrupted.\(timestamp).json")
+
+        do {
+            if fileManager.fileExists(atPath: backupURL.path) {
+                try fileManager.removeItem(at: backupURL)
+            }
+            try fileManager.moveItem(at: url, to: backupURL)
+            return SnapshotStoreLoadIssue
+                .corruptedStateRecovered(backupFilename: backupURL.lastPathComponent)
+                .localizedDescription
+        } catch {
+            return SnapshotStoreLoadIssue
+                .corruptedStateRecoveryFailed(details: error.localizedDescription)
+                .localizedDescription
+        }
     }
 }
 

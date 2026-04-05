@@ -42,7 +42,9 @@ struct CodexUsageClient {
         let sessionPct = primary?["used_percent"] as? Double
         let weeklyPct = secondary?["used_percent"] as? Double
         let resetTimestamp = primary?["reset_at"] as? TimeInterval
+        let weeklyResetTimestamp = secondary?["reset_at"] as? TimeInterval
         let nextResetAt = resetTimestamp.map { Date(timeIntervalSince1970: $0) }
+        let weeklyResetAt = weeklyResetTimestamp.map { Date(timeIntervalSince1970: $0) }
 
         let status: UsageStatus
         if let pct = sessionPct {
@@ -57,6 +59,7 @@ struct CodexUsageClient {
             sessionPercentUsed: sessionPct,
             weeklyPercentUsed: weeklyPct,
             nextResetAt: nextResetAt,
+            weeklyResetAt: weeklyResetAt,
             status: status
         )
     }

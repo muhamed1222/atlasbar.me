@@ -35,7 +35,7 @@ struct AccountVault: AccountVaulting {
     }
 
     func hasSavedAuth(for email: String) -> Bool {
-        if loadFromKeychain(email: email) != nil {
+        if loadFromKeychain(email: email, allowsUserInteraction: false) != nil {
             return true
         }
         return FileManager.default.fileExists(
@@ -61,7 +61,7 @@ struct AccountVault: AccountVaulting {
     }
 
     private func authData(for email: String) throws -> Data {
-        if let data = loadFromKeychain(email: email) {
+        if let data = loadFromKeychain(email: email, allowsUserInteraction: true) {
             return data
         }
 
@@ -77,14 +77,18 @@ struct AccountVault: AccountVaulting {
         return data
     }
 
-    private func loadFromKeychain(email: String) -> Data? {
-        let query: [CFString: Any] = [
+    private func loadFromKeychain(email: String, allowsUserInteraction: Bool) -> Data? {
+        var query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: Self.keychainService,
             kSecAttrAccount: email,
             kSecReturnData: true,
             kSecMatchLimit: kSecMatchLimitOne
         ]
+
+        if !allowsUserInteraction {
+            query[kSecUseAuthenticationUI] = kSecUseAuthenticationUIFail
+        }
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
