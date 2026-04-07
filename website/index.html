@@ -8,9 +8,64 @@
       name="description"
       content="A quiet macOS menu bar app for keeping an eye on your Codex and Claude usage."
     />
+    <meta property="og:title" content="LimitBar" />
+    <meta
+      property="og:description"
+      content="Track sessions, weekly limits, renewals, and account context without opening dashboards all day."
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <button
+      class="theme-toggle"
+      type="button"
+      aria-label="Toggle color theme"
+      data-theme-toggle
+    >
+      <span class="theme-toggle__dot" aria-hidden="true"></span>
+    </button>
+
+    <main class="page-shell">
+      <section class="hero" aria-labelledby="hero-title">
+        <header class="hero__header">
+          <h1 id="hero-title" class="hero__title">
+            <span class="hero__title-primary">LimitBar,</span>
+            <span class="hero__title-secondary">menu bar app</span>
+          </h1>
+        </header>
+
+        <div class="hero__body">
+          <p class="hero__copy" data-reveal>
+            A <span class="hero__accent">quiet</span> macOS menu bar app for
+            keeping an eye on your Codex and Claude usage.
+          </p>
+          <p class="hero__copy hero__copy--muted" data-reveal>
+            Track sessions, weekly limits, renewals, and account context
+            without opening dashboards all day.
+          </p>
+        </div>
+
+        <div class="hero__actions" data-reveal>
+          <a
+            class="button button--primary"
+            href="https://github.com/muhamed1222/atlasbar.me/releases"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Download for macOS
+          </a>
+          <a
+            class="button button--secondary"
+            href="https://github.com/muhamed1222/atlasbar.me"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub
+          </a>
+        </div>
+      </section>
+    </main>
+
     <script src="./script.js" defer></script>
   </body>
 </html>
