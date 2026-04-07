@@ -5,10 +5,10 @@ import Testing
 struct MenuBarLayoutTests {
     @Test
     func accountsSectionHeightScalesWithVisibleRows() {
-        #expect(accountsSectionMaxHeight(for: 0) == 112)
-        #expect(accountsSectionMaxHeight(for: 1) == 112)
-        #expect(accountsSectionMaxHeight(for: 2) == 228)
-        #expect(accountsSectionMaxHeight(for: 3) == 344)
-        #expect(accountsSectionMaxHeight(for: 5) == 344)
+        #expect(accountsSectionMaxHeight(for: 0) == 140)
+        #expect(accountsSectionMaxHeight(for: 1) == 140)
+        #expect(accountsSectionMaxHeight(for: 2) == 284)
+        #expect(accountsSectionMaxHeight(for: 3) == 428)
+        #expect(accountsSectionMaxHeight(for: 5) == 428)
     }
 }

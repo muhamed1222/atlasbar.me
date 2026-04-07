@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let logger = Logger(subsystem: "me.atlasbar.LimitBar", category: "DailyResetRecovery")
 
 struct DailyResetRecoveryOutcome: Equatable {
     let snapshots: [UsageSnapshot]
@@ -32,6 +35,13 @@ struct DailyResetRecoveryCoordinator: Sendable {
             .filter { shouldScheduleRecoveryTimer(for: $0, now: now) }
             .compactMap(\.nextResetAt)
             .min()
+
+        if !recoveredAccountIDs.isEmpty {
+            logger.info("Predicted reset for \(recoveredAccountIDs.count) account(s)")
+        }
+        if let nextRecoveryAt {
+            logger.debug("Next predicted reset scheduled at \(nextRecoveryAt)")
+        }
 
         return DailyResetRecoveryOutcome(
             snapshots: updatedSnapshots,

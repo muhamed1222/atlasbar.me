@@ -50,10 +50,8 @@ struct RenewalReminderSchedulerTests {
         )
 
         #expect(requests.map(\.identifier) == [
-            "renewal-\(account.id.uuidString)-7d",
             "renewal-\(account.id.uuidString)-3d",
-            "renewal-\(account.id.uuidString)-1d",
-            "renewal-\(account.id.uuidString)-0d"
+            "renewal-\(account.id.uuidString)-1d"
         ])
     }
 
@@ -167,8 +165,7 @@ struct RenewalReminderSchedulerTests {
         #expect(Set(spy.cancelledIdentifiers) == Set(scheduler.reminderIdentifiers(for: account.id)))
         #expect(spy.scheduled.map(\.identifier) == [
             "renewal-\(account.id.uuidString)-3d",
-            "renewal-\(account.id.uuidString)-1d",
-            "renewal-\(account.id.uuidString)-0d"
+            "renewal-\(account.id.uuidString)-1d"
         ])
     }
 }

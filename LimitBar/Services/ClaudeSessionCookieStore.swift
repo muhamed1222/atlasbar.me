@@ -25,12 +25,20 @@ protocol ClaudeSessionCookieStoring: Sendable {
 struct ClaudeSessionCookieStore: ClaudeSessionCookieStoring {
     private static let service = "me.atlasbar.LimitBar.claude-session-cookie"
     private static let account = "claude.ai-session-cookie"
+    private let desktopCookieReader = ClaudeDesktopCookieReader()
 
     func hasStoredCookie() -> Bool {
         cookieHeaderValue()?.isEmpty == false
     }
 
     func cookieHeaderValue() -> String? {
+        if let stored = storedCookieHeaderValue() {
+            return stored
+        }
+        return desktopCookieReader.cookieHeaderValue()
+    }
+
+    private func storedCookieHeaderValue() -> String? {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: Self.service,

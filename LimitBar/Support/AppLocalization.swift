@@ -60,8 +60,8 @@ struct AppStrings {
     var trackingSourcesTitle: String { tr(en: "Tracking sources", ru: "Источники данных") }
     var trackingSourcesDescription: String {
         tr(
-            en: "LimitBar reads Codex usage from ~/.codex/auth.json and the usage API. Claude usage comes from a connected Claude web session when available, or falls back to a saved Claude cookie and local token logs.",
-            ru: "LimitBar читает usage Codex через ~/.codex/auth.json и usage API. Данные Claude берутся из подключённой web-сессии Claude, а при необходимости откатываются к сохранённому cookie и локальным token-логам."
+            en: "LimitBar reads usage data from Codex and Claude accounts. Connect Claude below to enable real-time quota tracking.",
+            ru: "LimitBar читает данные об использовании из аккаунтов Codex и Claude. Подключите Claude ниже для отслеживания квоты в реальном времени."
         )
     }
     var status: String { tr(en: "Status", ru: "Статус") }
@@ -94,6 +94,30 @@ struct AppStrings {
             ru: "Cookie: sessionKey=...; lastActiveOrg=...;"
         )
     }
+    var claudeWebSectionTitle: String { tr(en: "Claude Web Session", ru: "Claude Web Session") }
+    var claudeCookieSectionTitle: String { tr(en: "Session Cookie", ru: "Cookie сессии") }
+    var cookieLabel: String { tr(en: "Cookie", ru: "Cookie") }
+    var sameDayFooterNote: String {
+        tr(
+            en: "\"Same day\" reminder fires at the start of the expiry day.",
+            ru: "Напоминание «В тот же день» срабатывает в начале дня истечения."
+        )
+    }
+    var pollingDefault: String { tr(en: "default", ru: "по умолч.") }
+    var pollingFooter: String {
+        tr(
+            en: "More frequent polling gives faster updates but uses slightly more battery.",
+            ru: "Более частый опрос даёт более быстрые обновления, но немного увеличивает расход батареи."
+        )
+    }
+    var resetToDefaults: String { tr(en: "Reset to defaults", ru: "Сбросить к дефолтам") }
+    var claudeCookieSecurityNote: String {
+        tr(
+            en: "The cookie is stored encrypted in your macOS Keychain and never sent anywhere except claude.ai.",
+            ru: "Cookie хранится в зашифрованном виде в macOS Keychain и никуда не передаётся, кроме claude.ai."
+        )
+    }
+    var claudeSessionCookieSectionTitle: String { tr(en: "Session Cookie", ru: "Cookie сессии") }
     var whileCodexRunning: String { tr(en: "While Codex is running", ru: "Когда Codex запущен") }
     var whileCodexClosed: String { tr(en: "While Codex is closed", ru: "Когда Codex закрыт") }
     var cooldown: String { tr(en: "Cooldown", ru: "Ожидание") }
@@ -103,6 +127,18 @@ struct AppStrings {
         tr(
             en: "Renewal reminders are scheduled automatically from the latest subscription expiry and update when these toggles change.",
             ru: "Напоминания о продлении создаются автоматически по последней дате окончания подписки и обновляются при изменении этих переключателей."
+        )
+    }
+    var cooldownFooter: String {
+        tr(
+            en: "LimitBar will notify you when a tracked account's usage quota resets and becomes available again.",
+            ru: "LimitBar уведомит вас, когда квота использования отслеживаемого аккаунта сбросится и станет доступной снова."
+        )
+    }
+    var noSubscriptionsNote: String {
+        tr(
+            en: "Reminders will activate automatically once LimitBar detects subscription expiry data for your accounts.",
+            ru: "Напоминания активируются автоматически, как только LimitBar обнаружит дату истечения подписки для ваших аккаунтов."
         )
     }
     var sameDay: String { tr(en: "Same day", ru: "В тот же день") }
@@ -127,6 +163,13 @@ struct AppStrings {
             ru: "Выберите аккаунт в списке, чтобы изменить приоритет и заметку."
         )
     }
+    var priorityFooter: String {
+        tr(
+            en: "Priority controls display order. Primary accounts appear first in the menu bar.",
+            ru: "Приоритет определяет порядок отображения. Основные аккаунты показываются первыми в меню-баре."
+        )
+    }
+    var noteCharacterLimit: String { tr(en: "500", ru: "500") }
     var optionalNoteFooter: String {
         tr(
             en: "Optional note for renewal context, handoff, or reminders",

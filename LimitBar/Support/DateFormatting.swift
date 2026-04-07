@@ -87,6 +87,101 @@ func shortUsageLabel(snapshot: UsageSnapshot, language: ResolvedAppLanguage = .e
     }
 }
 
+func compactMenuBarLabel(from label: String) -> String {
+    let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+    let components = trimmed.split(separator: " ")
+
+    if components.count == 2 {
+        let session = String(components[0])
+        let weekly = String(components[1])
+
+        guard session.hasPrefix("S"),
+              weekly.hasPrefix("W"),
+              session.dropFirst().allSatisfy(\.isNumber),
+              weekly.dropFirst().allSatisfy(\.isNumber) else {
+            return trimmed
+        }
+
+        return "\(session.dropFirst())%"
+    }
+
+    if trimmed.hasPrefix("S"), trimmed.dropFirst().allSatisfy(\.isNumber) {
+        return "\(trimmed.dropFirst())%"
+    }
+
+    return trimmed
+}
+
+func compactMenuBarLabel(snapshot: UsageSnapshot, language: ResolvedAppLanguage = .english) -> String {
+    if let session = snapshot.sessionPercentUsed {
+        return "\(Int(remainingPercent(from: session)))%"
+    }
+
+    return compactMenuBarLabel(from: shortUsageLabel(snapshot: snapshot, language: language))
+}
+
+func compactMenuBarLabel(
+    snapshot: UsageSnapshot,
+    provider: String,
+    language: ResolvedAppLanguage = .english
+) -> String {
+    if provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame {
+        if let session = snapshot.sessionPercentUsed {
+            return "\(Int(remainingPercent(from: session)))%"
+        }
+    }
+
+    return compactMenuBarLabel(snapshot: snapshot, language: language)
+}
+
+struct CompactMenuBarItem: Equatable {
+    var provider: String
+    var label: String
+}
+
+func compactMenuBarItems(
+    accounts: [Account],
+    snapshots: [UsageSnapshot],
+    language: ResolvedAppLanguage = .english
+) -> [CompactMenuBarItem] {
+    let accountsById = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0) })
+    let accountProviders = Set(accounts.map(\.provider))
+    let snapshotProviders = Set(snapshots.compactMap { accountsById[$0.accountId]?.provider })
+    let knownProviders = accountProviders.union(snapshotProviders)
+
+    guard !knownProviders.isEmpty else {
+        return [CompactMenuBarItem(provider: Provider.codex.name, label: "--")]
+    }
+
+    var orderedProviders: [String] = []
+    if knownProviders.contains(where: { $0.caseInsensitiveCompare(Provider.codex.name) == .orderedSame }) {
+        orderedProviders.append(Provider.codex.name)
+    }
+    if knownProviders.contains(where: { $0.caseInsensitiveCompare(Provider.claude.name) == .orderedSame }) {
+        orderedProviders.append(Provider.claude.name)
+    }
+
+    let extraProviders = knownProviders.filter { provider in
+        provider.caseInsensitiveCompare(Provider.codex.name) != .orderedSame
+            && provider.caseInsensitiveCompare(Provider.claude.name) != .orderedSame
+    }.sorted()
+    orderedProviders.append(contentsOf: extraProviders)
+
+    return orderedProviders.map { provider in
+        let latestSnapshot = snapshots
+            .filter { snapshot in
+                accountsById[snapshot.accountId]?.provider.caseInsensitiveCompare(provider) == .orderedSame
+            }
+            .max(by: { ($0.lastSyncedAt ?? .distantPast) < ($1.lastSyncedAt ?? .distantPast) })
+
+        let label = latestSnapshot.map {
+            compactMenuBarLabel(snapshot: $0, provider: provider, language: language)
+        } ?? "--"
+
+        return CompactMenuBarItem(provider: provider, label: label)
+    }
+}
+
 func staleUsageLabel(hasSnapshots: Bool, language: ResolvedAppLanguage = .english) -> String {
     hasSnapshots ? UsageStatus.stale.displayLabel(language: language) : AppStrings(language: language).offline
 }

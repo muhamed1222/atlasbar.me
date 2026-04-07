@@ -49,6 +49,17 @@ private final class SpySessionSwitcher: CodexSessionSwitching {
 @MainActor
 struct AccountVaultTests {
 
+    @Test
+    func storedAuthVaultNormalizesEmailKeys() {
+        var vault = StoredAuthVault()
+        let payload = Data("auth".utf8)
+
+        vault.setAuthData(payload, for: " User@Example.com ")
+
+        #expect(vault.authData(for: "user@example.com") == payload)
+        #expect(vault.authData(for: "USER@example.com") == payload)
+    }
+
     // MARK: canSwitch
 
     @Test

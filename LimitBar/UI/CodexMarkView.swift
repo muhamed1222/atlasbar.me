@@ -1,5 +1,37 @@
 import SwiftUI
 
+struct LimitBarLogoView: View {
+    enum Size {
+        case compact
+        case regular
+
+        var side: CGFloat {
+            switch self {
+            case .compact:
+                return 18
+            case .regular:
+                return 22
+            }
+        }
+    }
+
+    var size: Size = .compact
+
+    var body: some View {
+        Group {
+            if let nsImage = NSImage(named: "LimitBarLogoSymbol") {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: size.side, height: size.side)
+            } else {
+                CodexMarkView(size: size == .compact ? .compact : .regular)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 struct ProviderMarkView: View {
     let provider: String
     var size: CodexMarkView.Size = .compact
@@ -46,6 +78,8 @@ struct CodexMarkView: View {
     enum Style {
         case standard
         case elevated
+        case menuBar
+        case glyphOnly
 
         var gradientColors: [Color] {
             switch self {
@@ -53,6 +87,10 @@ struct CodexMarkView: View {
                 return [Color.blue.opacity(0.12), Color.cyan.opacity(0.1)]
             case .elevated:
                 return [Color.blue.opacity(0.24), Color.cyan.opacity(0.18)]
+            case .menuBar:
+                return [Color.white, Color.white.opacity(0.96)]
+            case .glyphOnly:
+                return [.clear, .clear]
             }
         }
 
@@ -62,6 +100,10 @@ struct CodexMarkView: View {
                 return Color.clear
             case .elevated:
                 return Color.white.opacity(0.08)
+            case .menuBar:
+                return Color.black.opacity(0.14)
+            case .glyphOnly:
+                return Color.clear
             }
         }
 
@@ -71,6 +113,10 @@ struct CodexMarkView: View {
                 return Color.white.opacity(0.94)
             case .elevated:
                 return Color.white.opacity(0.96)
+            case .menuBar:
+                return Color.black.opacity(0.9)
+            case .glyphOnly:
+                return .white
             }
         }
 
@@ -80,6 +126,10 @@ struct CodexMarkView: View {
                 return Color.white.opacity(0.95)
             case .elevated:
                 return Color.white.opacity(0.98)
+            case .menuBar:
+                return Color.clear
+            case .glyphOnly:
+                return Color.clear
             }
         }
 
@@ -89,6 +139,10 @@ struct CodexMarkView: View {
                 return glyphColor.opacity(0.24)
             case .elevated:
                 return glyphColor.opacity(0.3)
+            case .menuBar:
+                return Color.clear
+            case .glyphOnly:
+                return Color.clear
             }
         }
     }
@@ -97,23 +151,31 @@ struct CodexMarkView: View {
     var style: Style = .standard
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: style.gradientColors,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size.container, height: size.container)
-                .overlay(
+        Group {
+            if style == .glyphOnly {
+                CodexGlyphView(style: style)
+                    .frame(width: size.glyph + 8, height: size.glyph + 8)
+            } else {
+                ZStack {
                     Circle()
-                        .stroke(style.borderColor, lineWidth: 1)
-                )
+                        .fill(
+                            LinearGradient(
+                                colors: style.gradientColors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: size.container, height: size.container)
+                        .overlay(
+                            Circle()
+                                .stroke(style.borderColor, lineWidth: 1)
+                        )
 
-            CodexGlyphView(style: style)
-                .frame(width: size.glyph, height: size.glyph)
+                    CodexGlyphView(style: style)
+                        .frame(width: size.glyph, height: size.glyph)
+                }
+                .accessibilityHidden(true)
+            }
         }
         .accessibilityHidden(true)
     }
@@ -129,6 +191,10 @@ private struct ClaudeMarkView: View {
             return Color(red: 0.85, green: 0.47, blue: 0.34).opacity(0.12)
         case .elevated:
             return Color(red: 0.85, green: 0.47, blue: 0.34).opacity(0.2)
+        case .menuBar:
+            return Color.white
+        case .glyphOnly:
+            return Color.clear
         }
     }
 
@@ -138,22 +204,35 @@ private struct ClaudeMarkView: View {
             return Color(red: 0.85, green: 0.47, blue: 0.34).opacity(0.16)
         case .elevated:
             return Color.white.opacity(0.08)
+        case .menuBar:
+            return Color.black.opacity(0.14)
+        case .glyphOnly:
+            return Color.clear
         }
     }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(surfaceFill)
-                .frame(width: size.container, height: size.container)
-                .overlay(
+        Group {
+            if style == .glyphOnly {
+                ClaudeGlyphShape()
+                    .fill(Color.white)
+                    .frame(width: size.glyph + 8, height: size.glyph + 8)
+                    .frame(width: size.glyph + 8, height: size.glyph + 8)
+            } else {
+                ZStack {
                     Circle()
-                        .stroke(surfaceStroke, lineWidth: 1)
-                )
+                        .fill(surfaceFill)
+                        .frame(width: size.container, height: size.container)
+                        .overlay(
+                            Circle()
+                                .stroke(surfaceStroke, lineWidth: 1)
+                        )
 
-            ClaudeGlyphShape()
-                .fill(Color(red: 0.85, green: 0.47, blue: 0.34))
-                .frame(width: size.glyph + 1, height: size.glyph + 1)
+                    ClaudeGlyphShape()
+                        .fill(style == .menuBar ? Color.black.opacity(0.9) : Color(red: 0.85, green: 0.47, blue: 0.34))
+                        .frame(width: size.glyph + 1, height: size.glyph + 1)
+                }
+            }
         }
         .accessibilityHidden(true)
     }

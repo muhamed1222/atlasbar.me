@@ -33,11 +33,11 @@ struct AccountsSettingsView: View {
                 selection = appModel.sortedAccounts.first?.id
             }
         }
-        .onChange(of: appModel.sortedAccounts.map(\.id)) { _, ids in
-            if let selection, ids.contains(selection) {
+        .onChange(of: Set(appModel.accounts.map(\.id))) { _, idSet in
+            if let selection, idSet.contains(selection) {
                 return
             }
-            self.selection = ids.first
+            self.selection = appModel.sortedAccounts.first?.id
         }
     }
 
@@ -66,7 +66,12 @@ struct AccountsSettingsView: View {
 
                 Form {
                     Section(strings.identity) {
-                        ForEach(presentation.identityRows, id: \.title) { row in
+                        ForEach(
+                            presentation.identityRows.filter {
+                                $0.title != strings.account && $0.title != strings.provider
+                            },
+                            id: \.title
+                        ) { row in
                             detailRow(row.title, value: row.value)
                         }
 
@@ -81,14 +86,14 @@ struct AccountsSettingsView: View {
                                         set: { appModel.updateAccountEmail($0, for: account.id) }
                                     )
                                 )
-                                .multilineTextAlignment(.trailing)
+                                .multilineTextAlignment(.leading)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: 220)
                             }
                         }
                     }
 
-                    Section(strings.priority) {
+                    Section {
                         Picker(
                             strings.priority,
                             selection: Binding(
@@ -101,6 +106,10 @@ struct AccountsSettingsView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                    } header: {
+                        Text(strings.priority)
+                    } footer: {
+                        Text(strings.priorityFooter)
                     }
 
                     Section(strings.note) {
@@ -128,9 +137,9 @@ struct AccountsSettingsView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 Spacer()
-                                Text(presentation.noteCharacterCount)
+                                Text(appModel.strings.charactersCount(appModel.metadata(for: account.id).note.trimmingCharacters(in: .whitespacesAndNewlines).count))
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(appModel.metadata(for: account.id).note.trimmingCharacters(in: .whitespacesAndNewlines).count > 450 ? .orange : .secondary)
                             }
                         }
                     }

@@ -22,6 +22,7 @@ final class AppModel: ObservableObject {
     @Published var accountMetadata: [AccountMetadata] = []
     @Published var settings: AppSettingsState = .default
     @Published var activeCodexEmail: String?
+    @Published var activeClaudeAccountIdentifier: String?
     @Published var switchingAccountId: UUID?
     @Published var switchErrorMessage: String?
     @Published var claudeCookieConfigured: Bool = false
@@ -51,6 +52,7 @@ final class AppModel: ObservableObject {
     private let refreshCoordinator: UsageRefreshCoordinator
     private let notificationManager: any NotificationScheduling
     private let renewalReminderScheduler = RenewalReminderScheduler()
+    private let dailyResetRecoveryCoordinator = DailyResetRecoveryCoordinator()
     private let store: (any SnapshotStoring)?
     private let settingsCoordinator = SettingsCoordinator()
     private let vault: any AccountVaulting
@@ -128,8 +130,15 @@ final class AppModel: ObservableObject {
             persistenceErrorMessage = storageErrorMessage(for: details)
         }
         claudeCookieConfigured = claudeSessionCookieStore?.hasStoredCookie() ?? false
+        reconcilePredictedDailyResets()
         refreshCompactLabel()
         reconcilePersistedNotifications()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(systemLocaleDidChange),
+            name: NSLocale.currentLocaleDidChangeNotification,
+            object: nil
+        )
         if shouldStartPolling {
             startPolling()
         }
@@ -140,6 +149,11 @@ final class AppModel: ObservableObject {
 
     deinit {
         timerTask?.cancel()
+        NotificationCenter.default.removeObserver(self, name: NSLocale.currentLocaleDidChangeNotification, object: nil)
+    }
+
+    @objc private func systemLocaleDidChange() {
+        objectWillChange.send()
     }
 
     func refreshNow() {
@@ -237,6 +251,13 @@ final class AppModel: ObservableObject {
         } else {
             updated.pollingWhenClosed = interval
         }
+        applySettings(updated)
+    }
+
+    func resetPollingToDefaults() {
+        var updated = settings
+        updated.pollingWhenRunning = nil
+        updated.pollingWhenClosed = nil
         applySettings(updated)
     }
 
@@ -402,14 +423,35 @@ final class AppModel: ObservableObject {
         return vault.hasSavedAuth(for: email)
     }
 
-    func isActiveCodexAccount(_ account: Account) -> Bool {
-        guard account.provider.caseInsensitiveCompare(Provider.codex.name) == .orderedSame else {
+    func isActiveAccount(_ account: Account) -> Bool {
+        if account.provider.caseInsensitiveCompare(Provider.codex.name) == .orderedSame {
+            guard let email = account.email, let activeCodexEmail else {
+                return false
+            }
+            return email.caseInsensitiveCompare(activeCodexEmail) == .orderedSame
+        }
+
+        if account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame {
+            guard let activeClaudeAccountIdentifier else {
+                return false
+            }
+            let activeIdentifier = activeClaudeAccountIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !activeIdentifier.isEmpty else { return false }
+
+            if let email = account.email,
+               email.caseInsensitiveCompare(activeIdentifier) == .orderedSame {
+                return true
+            }
+
+            if let label = account.label,
+               label.caseInsensitiveCompare(activeIdentifier) == .orderedSame {
+                return true
+            }
+
             return false
         }
-        guard let email = account.email, let activeCodexEmail else {
-            return false
-        }
-        return email.caseInsensitiveCompare(activeCodexEmail) == .orderedSame
+
+        return false
     }
 
     func switchToAccount(_ account: Account) {
@@ -486,6 +528,7 @@ final class AppModel: ObservableObject {
         let outcome = await refreshCoordinator.refresh(from: currentPersistedState)
         codexRunning = outcome.codexRunning
         activeCodexEmail = outcome.activeCodexEmail
+        activeClaudeAccountIdentifier = outcome.activeClaudeAccountIdentifier
         accounts = outcome.accounts
         snapshots = outcome.snapshots
         if let details = outcome.persistenceErrorDetails {
@@ -493,8 +536,10 @@ final class AppModel: ObservableObject {
         } else {
             persistenceErrorMessage = nil
         }
-        if let accountId = outcome.renewalReminderAccountId {
-            reconcileRenewalReminders(for: accountId)
+        if outcome.shouldReconcileRenewalNotifications {
+            for account in accounts {
+                reconcileRenewalReminders(for: account.id)
+            }
         }
         if outcome.shouldReconcileCooldownNotifications {
             reconcileCooldownNotifications()
@@ -502,6 +547,7 @@ final class AppModel: ObservableObject {
         if let claudeWebSessionStatus = outcome.claudeWebSessionStatus {
             applyClaudeWebSessionStatus(claudeWebSessionStatus)
         }
+        reconcilePredictedDailyResets()
         refreshCompactLabel()
     }
 
@@ -667,6 +713,21 @@ final class AppModel: ObservableObject {
         for account in accounts {
             reconcileRenewalReminders(for: account.id)
         }
+    }
+
+    private func reconcilePredictedDailyResets(now: Date = .now) {
+        let outcome = dailyResetRecoveryCoordinator.reconcile(
+            snapshots: snapshots,
+            now: now
+        )
+
+        guard !outcome.recoveredAccountIDs.isEmpty else {
+            return
+        }
+
+        snapshots = outcome.snapshots
+        persist()
+        reconcileCooldownNotifications()
     }
 
     private func cancelNotifications(for accounts: [Account]) {

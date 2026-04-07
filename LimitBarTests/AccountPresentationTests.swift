@@ -46,6 +46,37 @@ struct AccountPresentationTests {
     }
 
     @Test
+    func claudeAccountRowPresentationShowsRemainingPercentsInBars() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Claude", email: "claude@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 100,
+            weeklyPercentUsed: 92,
+            nextResetAt: nil,
+            subscriptionExpiresAt: nil,
+            planType: "pro",
+            usageStatus: .coolingDown,
+            sourceConfidence: 0.95,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.usageBars == [
+            UsageBarPresentation(label: "S", remainingPercent: 0),
+            UsageBarPresentation(label: "W", remainingPercent: 8)
+        ])
+    }
+
+    @Test
     func accountRowPresentationAddsCooldownCountdownChip() {
         let now = Date(timeIntervalSince1970: 1_000_000)
         let account = Account(id: UUID(), provider: "Codex", email: "cooldown@example.com", label: nil)

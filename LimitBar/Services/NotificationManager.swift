@@ -18,7 +18,6 @@ private actor NotificationAuthorizationCoordinator {
         case idle
         case requesting(Task<Bool, Never>)
         case authorized
-        case denied
     }
 
     private let center: any UserNotificationCentering
@@ -32,8 +31,6 @@ private actor NotificationAuthorizationCoordinator {
         switch state {
         case .authorized:
             return true
-        case .denied:
-            return false
         case .requesting(let task):
             return await task.value
         case .idle:
@@ -42,8 +39,54 @@ private actor NotificationAuthorizationCoordinator {
             }
             state = .requesting(task)
             let granted = await task.value
-            state = granted ? .authorized : .denied
+            state = granted ? .authorized : .idle
             return granted
+        }
+    }
+}
+
+private final class PendingNotificationTaskCoordinator: @unchecked Sendable {
+    private struct Entry {
+        let token: UUID
+        let task: Task<Void, Never>
+    }
+
+    private let lock = NSLock()
+    private var entries: [String: Entry] = [:]
+
+    func replaceTask(
+        identifier: String,
+        operation: @escaping @Sendable () async -> Void
+    ) {
+        cancelTasks(withIdentifiers: [identifier])
+
+        let token = UUID()
+        let task = Task { [weak self] in
+            await operation()
+            self?.finishTask(identifier: identifier, token: token)
+        }
+
+        lock.withLock {
+            entries[identifier] = Entry(token: token, task: task)
+        }
+    }
+
+    func cancelTasks(withIdentifiers identifiers: [String]) {
+        let tasksToCancel = lock.withLock { () -> [Task<Void, Never>] in
+            identifiers.compactMap { identifier in
+                entries.removeValue(forKey: identifier)?.task
+            }
+        }
+
+        for task in tasksToCancel {
+            task.cancel()
+        }
+    }
+
+    private func finishTask(identifier: String, token: UUID) {
+        lock.withLock {
+            guard entries[identifier]?.token == token else { return }
+            entries.removeValue(forKey: identifier)
         }
     }
 }
@@ -51,6 +94,7 @@ private actor NotificationAuthorizationCoordinator {
 final class NotificationManager: @unchecked Sendable, NotificationScheduling {
     private let center: any UserNotificationCentering
     private let authorizationCoordinator: NotificationAuthorizationCoordinator
+    private let taskCoordinator = PendingNotificationTaskCoordinator()
 
     init(center: any UserNotificationCentering = UNUserNotificationCenter.current()) {
         self.center = center
@@ -72,6 +116,12 @@ final class NotificationManager: @unchecked Sendable, NotificationScheduling {
     }
 
     func cancelCooldownReadyNotification(accountId: UUID, accountName: String) {
+        taskCoordinator.cancelTasks(
+            withIdentifiers: [
+                cooldownIdentifier(for: accountId),
+                legacyCooldownIdentifier(for: accountName)
+            ]
+        )
         center.removePendingNotificationRequests(
             withIdentifiers: [
                 cooldownIdentifier(for: accountId),
@@ -90,6 +140,7 @@ final class NotificationManager: @unchecked Sendable, NotificationScheduling {
     }
 
     func cancelNotifications(withIdentifiers identifiers: [String]) {
+        taskCoordinator.cancelTasks(withIdentifiers: identifiers)
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 
@@ -99,10 +150,12 @@ final class NotificationManager: @unchecked Sendable, NotificationScheduling {
         body: String,
         at date: Date
     ) {
-        Task { [authorizationCoordinator, center] in
+        taskCoordinator.replaceTask(identifier: identifier) { [authorizationCoordinator, center] in
+            guard !Task.isCancelled else { return }
             guard await authorizationCoordinator.requestAuthorization() else {
                 return
             }
+            guard !Task.isCancelled else { return }
 
             let timeInterval = date.timeIntervalSinceNow
             guard timeInterval > 0 else { return }
@@ -118,6 +171,7 @@ final class NotificationManager: @unchecked Sendable, NotificationScheduling {
             )
 
             let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            guard !Task.isCancelled else { return }
             try? await center.add(request)
         }
     }

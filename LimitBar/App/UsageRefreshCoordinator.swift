@@ -6,10 +6,11 @@ private let refreshLogger = Logger(subsystem: "me.atlasbar.LimitBar", category: 
 struct UsageRefreshOutcome: Equatable {
     let codexRunning: Bool
     let activeCodexEmail: String?
+    let activeClaudeAccountIdentifier: String?
     let accounts: [Account]
     let snapshots: [UsageSnapshot]
     let persistenceErrorDetails: String?
-    let renewalReminderAccountId: UUID?
+    let shouldReconcileRenewalNotifications: Bool
     let shouldReconcileCooldownNotifications: Bool
     let claudeWebSessionStatus: ClaudeWebSessionStatusProjection?
 }
@@ -55,6 +56,7 @@ struct UsageRefreshCoordinator: Sendable {
         let claudeWebSessionController = self.claudeWebSessionController
 
         let activeCodexEmail = await Self.readActiveCodexEmail(vault: vault)
+        let activeClaudeAccountIdentifier = claudeCredentialsReader.readCredentials()?.accountIdentifier
         if let activeCodexEmail {
             await Self.saveCurrentAuth(for: activeCodexEmail, vault: vault)
         }
@@ -65,7 +67,7 @@ struct UsageRefreshCoordinator: Sendable {
 
         var workingState = state
         var persistenceErrorDetails: String?
-        var renewalReminderAccountId: UUID?
+        var shouldReconcileRenewalNotifications = false
         var shouldReconcileCooldownNotifications = false
 
         let codexStep = await Self.applyProviderRefresh(
@@ -77,7 +79,7 @@ struct UsageRefreshCoordinator: Sendable {
         )
         workingState = codexStep.state
         persistenceErrorDetails = codexStep.persistenceErrorDetails
-        renewalReminderAccountId = codexStep.renewalReminderAccountId
+        shouldReconcileRenewalNotifications = codexStep.shouldReconcileRenewalNotifications
         shouldReconcileCooldownNotifications = codexStep.shouldReconcileCooldownNotifications
 
         let claudeStep = await Self.applyProviderRefresh(
@@ -91,15 +93,17 @@ struct UsageRefreshCoordinator: Sendable {
         if let claudeError = claudeStep.persistenceErrorDetails {
             persistenceErrorDetails = claudeError
         }
+        shouldReconcileRenewalNotifications = shouldReconcileRenewalNotifications || claudeStep.shouldReconcileRenewalNotifications
         shouldReconcileCooldownNotifications = shouldReconcileCooldownNotifications || claudeStep.shouldReconcileCooldownNotifications
 
         return UsageRefreshOutcome(
             codexRunning: codexRunning,
             activeCodexEmail: activeCodexEmail,
+            activeClaudeAccountIdentifier: activeClaudeAccountIdentifier,
             accounts: workingState.accounts,
             snapshots: workingState.snapshots,
             persistenceErrorDetails: persistenceErrorDetails,
-            renewalReminderAccountId: renewalReminderAccountId,
+            shouldReconcileRenewalNotifications: shouldReconcileRenewalNotifications,
             shouldReconcileCooldownNotifications: shouldReconcileCooldownNotifications,
             claudeWebSessionStatus: await Self.cachedClaudeWebSessionStatus(
                 claudeUsagePipeline: claudeUsagePipeline,
@@ -123,9 +127,7 @@ struct UsageRefreshCoordinator: Sendable {
                     return ProviderRefreshStepResult(
                         state: projection.persistedState,
                         persistenceErrorDetails: nil,
-                        renewalReminderAccountId: provider.caseInsensitiveCompare(Provider.codex.name) == .orderedSame
-                            ? Self.mostRecentlySyncedAccountId(in: projection.snapshots)
-                            : nil,
+                        shouldReconcileRenewalNotifications: true,
                         shouldReconcileCooldownNotifications: false
                     )
                 } catch {
@@ -133,7 +135,7 @@ struct UsageRefreshCoordinator: Sendable {
                     return ProviderRefreshStepResult(
                         state: state,
                         persistenceErrorDetails: error.localizedDescription,
-                        renewalReminderAccountId: nil,
+                        shouldReconcileRenewalNotifications: false,
                         shouldReconcileCooldownNotifications: false
                     )
                 }
@@ -158,7 +160,7 @@ struct UsageRefreshCoordinator: Sendable {
                 return ProviderRefreshStepResult(
                     state: projection.persistedState,
                     persistenceErrorDetails: nil,
-                    renewalReminderAccountId: nil,
+                    shouldReconcileRenewalNotifications: false,
                     shouldReconcileCooldownNotifications: hasProviderAccounts
                 )
             } catch {
@@ -166,7 +168,7 @@ struct UsageRefreshCoordinator: Sendable {
                 return ProviderRefreshStepResult(
                     state: state,
                     persistenceErrorDetails: error.localizedDescription,
-                    renewalReminderAccountId: nil,
+                    shouldReconcileRenewalNotifications: false,
                     shouldReconcileCooldownNotifications: false
                 )
             }
@@ -217,17 +219,11 @@ struct UsageRefreshCoordinator: Sendable {
             await provider.fetchCurrentUsage()
         }.value
     }
-
-    private static func mostRecentlySyncedAccountId(in snapshots: [UsageSnapshot]) -> UUID? {
-        snapshots.max { lhs, rhs in
-            (lhs.lastSyncedAt ?? .distantPast) < (rhs.lastSyncedAt ?? .distantPast)
-        }?.accountId
-    }
 }
 
 private struct ProviderRefreshStepResult {
     let state: PersistedState
     let persistenceErrorDetails: String?
-    let renewalReminderAccountId: UUID?
+    let shouldReconcileRenewalNotifications: Bool
     let shouldReconcileCooldownNotifications: Bool
 }

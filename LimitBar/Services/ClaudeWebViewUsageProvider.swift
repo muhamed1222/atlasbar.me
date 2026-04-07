@@ -5,12 +5,12 @@ private let logger = Logger(subsystem: "me.atlasbar.LimitBar", category: "Claude
 
 struct ClaudeWebViewUsageProvider: CurrentUsageProviding {
     private let credentialsReader: any ClaudeCredentialsReading
-    private let sessionController: ClaudeWebSessionController
+    private let sessionController: any ClaudeWebSessionControlling
     private let fallbackWebProvider: (any CurrentUsageProviding)?
 
     init(
         credentialsReader: any ClaudeCredentialsReading = ClaudeKeychainReader(),
-        sessionController: ClaudeWebSessionController,
+        sessionController: any ClaudeWebSessionControlling,
         fallbackWebProvider: (any CurrentUsageProviding)? = nil
     ) {
         self.credentialsReader = credentialsReader
@@ -27,10 +27,16 @@ struct ClaudeWebViewUsageProvider: CurrentUsageProviding {
            result.organizationUUID == credentials.organizationUUID,
            (200...299).contains(result.status),
            let payload = decodeUsagePayload(from: result.body) {
+            let subscriptionDetails = await sessionController.fetchSubscriptionDetailsResponse(
+                organizationUUID: credentials.organizationUUID
+            )
+            let subscription = subscriptionDetails
+                .flatMap { (200...299).contains($0.status) ? decodeSubscriptionDetailsPayload(from: $0.body) : nil }
+
             return CurrentUsagePayload(
                 accountIdentifier: credentials.accountIdentifier,
                 planType: credentials.subscriptionType,
-                subscriptionExpiresAt: nil,
+                subscriptionExpiresAt: subscription?.nextChargeDate,
                 sessionPercentUsed: payload.fiveHour?.percentUsed,
                 weeklyPercentUsed: payload.sevenDay?.percentUsed,
                 nextResetAt: payload.fiveHour?.resetAt ?? payload.sevenDay?.resetAt,

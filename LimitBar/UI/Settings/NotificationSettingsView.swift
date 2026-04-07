@@ -7,7 +7,7 @@ struct NotificationSettingsView: View {
         let strings = appModel.strings
 
         Form {
-            Section(strings.cooldown) {
+            Section {
                 Toggle(
                     strings.cooldownReadyNotifications,
                     isOn: Binding(
@@ -15,9 +15,18 @@ struct NotificationSettingsView: View {
                         set: { appModel.setCooldownNotificationsEnabled($0) }
                     )
                 )
+            } header: {
+                Text(strings.cooldown)
+            } footer: {
+                Text(strings.cooldownFooter)
             }
 
             Section {
+                if !appModel.snapshots.contains(where: { $0.subscriptionExpiresAt != nil }) {
+                    Text(strings.noSubscriptionsNote)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 reminderToggle(strings.days(7), keyPath: \.days7Enabled)
                 reminderToggle(strings.days(3), keyPath: \.days3Enabled)
                 reminderToggle(strings.oneDay, keyPath: \.days1Enabled)
@@ -25,7 +34,11 @@ struct NotificationSettingsView: View {
             } header: {
                 Text(strings.renewalReminders)
             } footer: {
-                Text(strings.renewalRemindersFooter)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(strings.renewalRemindersFooter)
+                    Text(strings.sameDayFooterNote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

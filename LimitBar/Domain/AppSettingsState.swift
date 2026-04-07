@@ -7,10 +7,10 @@ struct RenewalReminderSettings: Codable, Equatable {
     var sameDayEnabled: Bool
 
     static let `default` = RenewalReminderSettings(
-        days7Enabled: true,
+        days7Enabled: false,
         days3Enabled: true,
         days1Enabled: true,
-        sameDayEnabled: true
+        sameDayEnabled: false
     )
 }
 

@@ -9,6 +9,7 @@ struct AccountRowView: View {
     let onDelete: () -> Void
     let onSwitch: () -> Void
     let language: ResolvedAppLanguage
+    @State private var isRowHovered = false
     private let detailRowHeight: CGFloat = 24
     private let detailRowSpacing: CGFloat = 3
     private let metricsBlockPadding: CGFloat = 3
@@ -44,21 +45,12 @@ struct AccountRowView: View {
             || weeklyUsage != nil
             || presentation.resetAccent != nil
             || presentation.subscriptionChip != nil
-            || presentation.statusChip != nil
             || presentation.syncText != nil
-    }
-
-    private var hasSummaryChips: Bool {
-        presentation.statusChip != nil || presentation.sourceChip != nil
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             headerLine
-
-            if hasSummaryChips {
-                summaryLine
-            }
 
             if hasMetricsContent {
                 metricsLine
@@ -79,6 +71,7 @@ struct AccountRowView: View {
                 .fill(Color.primary.opacity(0.045))
         )
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onHover { isRowHovered = $0 }
     }
 
     private var headerLine: some View {
@@ -90,11 +83,11 @@ struct AccountRowView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
-            Spacer(minLength: 8)
-
             if let planLabel = presentation.planLabel {
                 planBadge(planLabel)
             }
+
+            Spacer(minLength: 8)
 
             if isActive {
                 activeIndicator
@@ -103,17 +96,6 @@ struct AccountRowView: View {
             }
 
             deleteButton
-        }
-    }
-
-    private var summaryLine: some View {
-        HStack(spacing: 4) {
-            if let sourceChip = presentation.sourceChip {
-                chip(sourceChip, softened: presentation.statusChip != nil)
-            }
-            if let statusChip = presentation.statusChip {
-                chip(statusChip)
-            }
         }
     }
 
@@ -248,12 +230,6 @@ struct AccountRowView: View {
                         value: subscriptionValueText,
                         tone: presentation.subscriptionChip?.tone.color ?? .secondary
                     )
-                } else if presentation.resetAccent == nil, let statusChip = presentation.statusChip {
-                    detailRow(
-                        title: strings.account,
-                        value: statusChip.text,
-                        tone: statusChip.tone.color
-                    )
                 }
             }
 
@@ -369,6 +345,8 @@ struct AccountRowView: View {
         }
         .buttonStyle(RowIconButtonStyle())
         .help(strings.deleteAccountHelp)
+        .opacity(isRowHovered ? 1 : 0)
+        .animation(.easeOut(duration: 0.15), value: isRowHovered)
     }
 
     private var activeIndicator: some View {

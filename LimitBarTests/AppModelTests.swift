@@ -151,6 +151,7 @@ private final class FakeClaudeWebSessionController: ClaudeWebSessionControlling 
 
     var preparedLoginPage = false
     var resultByOrganization: [String: ClaudeWebFetchResult] = [:]
+    var subscriptionResultByOrganization: [String: ClaudeWebFetchResult] = [:]
 
     func prepareLoginPage() {
         preparedLoginPage = true
@@ -158,11 +159,17 @@ private final class FakeClaudeWebSessionController: ClaudeWebSessionControlling 
 
     func clearSession() async throws {
         resultByOrganization.removeAll()
+        subscriptionResultByOrganization.removeAll()
     }
 
     func fetchUsageResponse(organizationUUID: String?) async -> ClaudeWebFetchResult? {
         guard let organizationUUID else { return nil }
         return resultByOrganization[organizationUUID]
+    }
+
+    func fetchSubscriptionDetailsResponse(organizationUUID: String?) async -> ClaudeWebFetchResult? {
+        guard let organizationUUID else { return nil }
+        return subscriptionResultByOrganization[organizationUUID]
     }
 
     func cachedUsageResponse(organizationUUID: String?) -> ClaudeWebFetchResult? {
@@ -368,6 +375,123 @@ struct AppModelTests {
         #expect(remainingPercent(from: 14) == 86)
         #expect(remainingPercent(from: 32) == 68)
         #expect(shortUsageLabel(snapshot: snapshot) == "S86 W68")
+    }
+
+    @Test
+    func compactMenuBarLabelShowsOnlySessionPercentage() {
+        #expect(compactMenuBarLabel(from: "S86 W68") == "86%")
+        #expect(compactMenuBarLabel(from: "S86") == "86%")
+        #expect(compactMenuBarLabel(from: "2h 10m") == "2h 10m")
+        #expect(compactMenuBarLabel(from: "Stale") == "Stale")
+    }
+
+    @Test
+    func compactMenuBarItemsShowBothProvidersInStableOrder() {
+        let codex = Account(id: UUID(), provider: Provider.codex.name, email: "codex@example.com", label: nil)
+        let claude = Account(id: UUID(), provider: Provider.claude.name, email: "claude@example.com", label: nil)
+
+        let codexSnapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: codex.id,
+            sessionPercentUsed: 10,
+            weeklyPercentUsed: 20,
+            nextResetAt: nil,
+            weeklyResetAt: nil,
+            subscriptionExpiresAt: nil,
+            planType: nil,
+            usageStatus: .available,
+            sourceConfidence: 1,
+            lastSyncedAt: Date(timeIntervalSince1970: 100),
+            rawExtractedStrings: []
+        )
+
+        let claudeSnapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: claude.id,
+            sessionPercentUsed: 15,
+            weeklyPercentUsed: 25,
+            nextResetAt: nil,
+            weeklyResetAt: nil,
+            subscriptionExpiresAt: nil,
+            planType: nil,
+            usageStatus: .available,
+            sourceConfidence: 1,
+            lastSyncedAt: Date(timeIntervalSince1970: 200),
+            rawExtractedStrings: []
+        )
+
+        #expect(
+            compactMenuBarItems(
+                accounts: [codex, claude],
+                snapshots: [codexSnapshot, claudeSnapshot]
+            ) == [
+                CompactMenuBarItem(provider: Provider.codex.name, label: "90%"),
+                CompactMenuBarItem(provider: Provider.claude.name, label: "85%")
+            ]
+        )
+    }
+
+    @Test
+    func compactMenuBarItemsPreferPercentageOverCountdown() {
+        let claude = Account(id: UUID(), provider: Provider.claude.name, email: "claude@example.com", label: nil)
+
+        let claudeSnapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: claude.id,
+            sessionPercentUsed: 25,
+            weeklyPercentUsed: nil,
+            nextResetAt: Date().addingTimeInterval(3 * 3600),
+            weeklyResetAt: nil,
+            subscriptionExpiresAt: nil,
+            planType: nil,
+            usageStatus: .exhausted,
+            sourceConfidence: 1,
+            lastSyncedAt: Date(timeIntervalSince1970: 200),
+            rawExtractedStrings: []
+        )
+
+        #expect(
+            compactMenuBarItems(accounts: [claude], snapshots: [claudeSnapshot]) == [
+                CompactMenuBarItem(provider: Provider.claude.name, label: "75%")
+            ]
+        )
+    }
+
+    @Test
+    func compactMenuBarItemsShowPlaceholderForProviderWithoutSnapshot() {
+        let codex = Account(id: UUID(), provider: Provider.codex.name, email: "codex@example.com", label: nil)
+        let claude = Account(id: UUID(), provider: Provider.claude.name, email: "claude@example.com", label: nil)
+
+        let codexSnapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: codex.id,
+            sessionPercentUsed: 10,
+            weeklyPercentUsed: 20,
+            nextResetAt: nil,
+            weeklyResetAt: nil,
+            subscriptionExpiresAt: nil,
+            planType: nil,
+            usageStatus: .available,
+            sourceConfidence: 1,
+            lastSyncedAt: Date(timeIntervalSince1970: 100),
+            rawExtractedStrings: []
+        )
+
+        #expect(
+            compactMenuBarItems(accounts: [codex, claude], snapshots: [codexSnapshot]) == [
+                CompactMenuBarItem(provider: Provider.codex.name, label: "90%"),
+                CompactMenuBarItem(provider: Provider.claude.name, label: "--")
+            ]
+        )
+    }
+
+    @Test
+    func compactMenuBarProviderFallsBackToCodexWithoutSnapshots() {
+        #expect(
+            compactMenuBarItems(accounts: [], snapshots: []) == [
+                CompactMenuBarItem(provider: Provider.codex.name, label: "--")
+            ]
+        )
     }
 
     @Test
@@ -793,7 +917,7 @@ struct AppModelTests {
         #expect(notificationManager.cooldownScheduled.count == 1)
         #expect(notificationManager.cooldownScheduled.first?.accountName == account.displayName)
         #expect(Set(notificationManager.cancelledIdentifiers).count == 4)
-        #expect(notificationManager.renewalScheduled.count == 4)
+        #expect(notificationManager.renewalScheduled.count == 2)
     }
 
     @Test
@@ -1228,6 +1352,43 @@ struct AppModelTests {
         #expect(model.compactLabel == countdownString(until: resetAt, language: model.resolvedLanguage))
         #expect(notifications.scheduled.count == 1)
         #expect(notifications.scheduled.first?.date == resetAt)
+    }
+
+    @Test
+    func refreshReconcilesClaudeRenewalRemindersAfterSuccessfulRefresh() async {
+        let store = InMemorySnapshotStore()
+        let notifications = NotificationManagerSpy()
+        let renewalDate = Date().addingTimeInterval(10 * 24 * 60 * 60)
+        let claudePayload = CurrentUsagePayload(
+            accountIdentifier: "claude@example.com",
+            planType: "pro",
+            subscriptionExpiresAt: renewalDate,
+            sessionPercentUsed: 4,
+            weeklyPercentUsed: 21,
+            nextResetAt: Date().addingTimeInterval(2 * 60 * 60),
+            usageStatus: .available,
+            sourceConfidence: 0.98,
+            rawExtractedStrings: [],
+            provider: Provider.claude.name,
+            totalTokensToday: 1200,
+            totalTokensThisWeek: 4500
+        )
+        let model = AppModel(
+            usageProvider: FakeCurrentUsageProvider(result: nil),
+            runningChecker: FakeRunningChecker(isCodexRunning: false),
+            notificationManager: notifications,
+            store: store,
+            claudeUsageProvider: FakeCurrentUsageProvider(result: claudePayload),
+            shouldStartPolling: false
+        )
+
+        await model.refreshNowAsync()
+
+        #expect(model.accounts.count == 1)
+        #expect(model.accounts.first?.provider == Provider.claude.name)
+        #expect(model.snapshots.first?.subscriptionExpiresAt == renewalDate)
+        #expect(notifications.renewalScheduled.count == 2)
+        #expect(Set(notifications.cancelledIdentifiers) == Set(RenewalReminderScheduler().reminderIdentifiers(for: model.accounts[0].id)))
     }
 
     @Test
@@ -1849,12 +2010,13 @@ struct AppModelTests {
     }
 
     @Test
-    func isActiveCodexAccountIgnoresNonCodexProviders() {
+    func isActiveAccountMatchesCodexAndClaudeProviders() {
         let model = AppModel(
             store: InMemorySnapshotStore(),
             shouldStartPolling: false
         )
         model.activeCodexEmail = "shared@example.com"
+        model.activeClaudeAccountIdentifier = "shared@example.com"
 
         let claudeAccount = Account(
             id: UUID(),
@@ -1869,8 +2031,112 @@ struct AppModelTests {
             label: nil
         )
 
-        #expect(model.isActiveCodexAccount(claudeAccount) == false)
-        #expect(model.isActiveCodexAccount(codexAccount) == true)
+        #expect(model.isActiveAccount(claudeAccount) == true)
+        #expect(model.isActiveAccount(codexAccount) == true)
+    }
+
+    @Test
+    func isActiveAccountMatchesClaudeLabelWhenActiveIdentifierIsNotEmail() {
+        let model = AppModel(
+            store: InMemorySnapshotStore(),
+            shouldStartPolling: false
+        )
+        model.activeClaudeAccountIdentifier = "Claude Workspace"
+
+        let claudeAccount = Account(
+            id: UUID(),
+            provider: Provider.claude.name,
+            email: nil,
+            label: "Claude Workspace"
+        )
+
+        #expect(model.isActiveAccount(claudeAccount) == true)
+    }
+
+    @Test
+    func initRecoversExpiredCodexSnapshotToPredictedReset() {
+        let account = Account(
+            id: UUID(),
+            provider: Provider.codex.name,
+            email: "codex@example.com",
+            label: nil
+        )
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 73,
+            weeklyPercentUsed: 40,
+            nextResetAt: Date().addingTimeInterval(-300),
+            weeklyResetAt: nil,
+            subscriptionExpiresAt: nil,
+            planType: "plus",
+            usageStatus: .stale,
+            stateOrigin: .server,
+            sourceConfidence: 1.0,
+            lastSyncedAt: Date().addingTimeInterval(-3600),
+            rawExtractedStrings: []
+        )
+
+        let model = AppModel(
+            usageProvider: FakeCurrentUsageProvider(result: nil),
+            runningChecker: FakeRunningChecker(isCodexRunning: false),
+            store: InMemorySnapshotStore(
+                state: PersistedState(accounts: [account], snapshots: [snapshot])
+            ),
+            shouldStartPolling: false
+        )
+
+        #expect(model.snapshots.count == 1)
+        #expect(model.snapshots[0].accountId == account.id)
+        #expect(model.snapshots[0].sessionPercentUsed == 0)
+        #expect(model.snapshots[0].usageStatus == .available)
+        #expect(model.snapshots[0].stateOrigin == .predictedReset)
+    }
+
+    @Test
+    func refreshRecoversExpiredCodexSnapshotWhenUsageFetchFails() async {
+        let account = Account(
+            id: UUID(),
+            provider: Provider.codex.name,
+            email: "codex@example.com",
+            label: nil
+        )
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 88,
+            weeklyPercentUsed: 55,
+            nextResetAt: Date().addingTimeInterval(-300),
+            weeklyResetAt: nil,
+            subscriptionExpiresAt: nil,
+            planType: "plus",
+            usageStatus: .stale,
+            stateOrigin: .server,
+            sourceConfidence: 1.0,
+            lastSyncedAt: Date().addingTimeInterval(-3600),
+            rawExtractedStrings: []
+        )
+
+        let model = AppModel(
+            usageProvider: FakeCurrentUsageProvider(result: nil),
+            runningChecker: FakeRunningChecker(isCodexRunning: false),
+            store: InMemorySnapshotStore(
+                state: PersistedState(accounts: [account], snapshots: [snapshot])
+            ),
+            vault: ActiveEmailVault(email: account.email),
+            shouldStartPolling: false
+        )
+
+        model.snapshots[0].sessionPercentUsed = 88
+        model.snapshots[0].usageStatus = .stale
+
+        await model.refreshNowAsync()
+
+        #expect(model.snapshots.count == 1)
+        #expect(model.snapshots[0].accountId == account.id)
+        #expect(model.snapshots[0].sessionPercentUsed == 0)
+        #expect(model.snapshots[0].usageStatus == .available)
+        #expect(model.snapshots[0].stateOrigin == .predictedReset)
     }
 
 }

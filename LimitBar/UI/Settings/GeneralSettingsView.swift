@@ -35,45 +35,34 @@ struct GeneralSettingsView: View {
                 }
             }
 
-            Section(strings.polling) {
-                Stepper(
-                    value: runningIntervalBinding,
-                    in: 5...60,
-                    step: 5
-                ) {
+            Section {
+                Stepper(value: runningIntervalBinding, in: 5...60, step: 5) {
                     settingRow(
                         title: strings.whileCodexRunning,
-                        value: strings.seconds(Int(runningIntervalBinding.wrappedValue))
+                        value: strings.seconds(Int(runningIntervalBinding.wrappedValue)),
+                        isDefault: appModel.settings.pollingWhenRunning == nil
                     )
                 }
-
-                Stepper(
-                    value: closedIntervalBinding,
-                    in: 30...300,
-                    step: 15
-                ) {
+                Stepper(value: closedIntervalBinding, in: 30...300, step: 15) {
                     settingRow(
                         title: strings.whileCodexClosed,
-                        value: strings.seconds(Int(closedIntervalBinding.wrappedValue))
+                        value: strings.seconds(Int(closedIntervalBinding.wrappedValue)),
+                        isDefault: appModel.settings.pollingWhenClosed == nil
                     )
                 }
-            }
-
-            Section(strings.languageTitle) {
-                Picker(
-                    strings.appLanguage,
-                    selection: Binding(
-                        get: { appModel.settings.language },
-                        set: { appModel.setLanguage($0) }
-                    )
-                ) {
-                    ForEach(AppLanguage.allCases) { language in
-                        Text(language.displayLabel(language: appModel.resolvedLanguage)).tag(language)
+                if appModel.settings.pollingWhenRunning != nil || appModel.settings.pollingWhenClosed != nil {
+                    Button(strings.resetToDefaults) {
+                        appModel.resetPollingToDefaults()
                     }
+                    .font(.footnote)
                 }
+            } header: {
+                Text(strings.polling)
+            } footer: {
+                Text(strings.pollingFooter)
             }
 
-            Section(strings.claudeQuotaTitle) {
+            Section(strings.claudeWebSectionTitle) {
                 settingRow(
                     title: strings.status,
                     value: appModel.claudeWebSessionConnected
@@ -106,9 +95,11 @@ struct GeneralSettingsView: View {
                     }
                 }
                 .padding(.vertical, 4)
+            }
 
+            Section(strings.claudeCookieSectionTitle) {
                 settingRow(
-                    title: "Cookie",
+                    title: strings.cookieLabel,
                     value: appModel.claudeCookieConfigured
                         ? strings.claudeCookieConnected
                         : strings.claudeCookieMissing
@@ -119,6 +110,10 @@ struct GeneralSettingsView: View {
                         .font(.headline)
 
                     Text(strings.claudeCookieDescription)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    Text(strings.claudeCookieSecurityNote)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -153,6 +148,20 @@ struct GeneralSettingsView: View {
                 }
                 .padding(.vertical, 4)
             }
+
+            Section(strings.languageTitle) {
+                Picker(
+                    strings.appLanguage,
+                    selection: Binding(
+                        get: { appModel.settings.language },
+                        set: { appModel.setLanguage($0) }
+                    )
+                ) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.displayLabel(language: appModel.resolvedLanguage)).tag(language)
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
         .navigationTitle(strings.general)
@@ -182,11 +191,11 @@ struct GeneralSettingsView: View {
         )
     }
 
-    private func settingRow(title: String, value: String) -> some View {
+    private func settingRow(title: String, value: String, isDefault: Bool = false) -> some View {
         HStack {
             Text(title)
             Spacer()
-            Text(value)
+            Text(isDefault ? "\(value) (\(appModel.strings.pollingDefault))" : value)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }

@@ -25,6 +25,10 @@ struct UsageBarPresentation: Equatable {
     var remainingPercent: Int
 }
 
+private func clampedPercent(_ value: Double) -> Int {
+    Int(min(max(value, 0), 100))
+}
+
 struct ResetAccentPresentation: Equatable {
     var title: String
     var countdownText: String
@@ -144,7 +148,7 @@ func makeAccountRowPresentation(
         chips.append(PresentationChip(text: strings.noData, tone: .secondary, style: .outlined))
     }
 
-    let usageBars = usageBarsPresentation(snapshot: snapshot)
+    let usageBars = usageBarsPresentation(snapshot: snapshot, provider: account.provider)
     let syncText = snapshot?.lastSyncedAt.map {
         strings.synced(localizedRelativeDate($0, language: language, now: now))
     }
@@ -290,17 +294,22 @@ func makeAccountDetailPresentation(
     )
 }
 
-private func usageBarsPresentation(snapshot: UsageSnapshot?) -> [UsageBarPresentation] {
+private func usageBarsPresentation(snapshot: UsageSnapshot?, provider _: String) -> [UsageBarPresentation] {
     guard let snapshot else {
         return []
     }
 
     var bars: [UsageBarPresentation] = []
+
     if let session = snapshot.sessionPercentUsed {
-        bars.append(UsageBarPresentation(label: "S", remainingPercent: Int(remainingPercent(from: session))))
+        bars.append(
+            UsageBarPresentation(label: "S", remainingPercent: clampedPercent(remainingPercent(from: session)))
+        )
     }
     if let weekly = snapshot.weeklyPercentUsed {
-        bars.append(UsageBarPresentation(label: "W", remainingPercent: Int(remainingPercent(from: weekly))))
+        bars.append(
+            UsageBarPresentation(label: "W", remainingPercent: clampedPercent(remainingPercent(from: weekly)))
+        )
     }
     return bars
 }
@@ -470,23 +479,18 @@ private func planBadgeText(for rawPlanType: String?) -> String? {
     }
 
     let normalized = rawPlanType.lowercased()
-    if normalized.contains("enterprise") {
-        return "Enterprise"
-    }
-    if normalized.contains("team") {
-        return "Team"
-    }
-    if normalized.contains("plus") {
-        return "Plus"
-    }
-    if normalized.contains("pro") {
-        return "Pro"
-    }
-    if normalized == "go" {
-        return "Go"
-    }
-    if normalized.contains("free") {
-        return "Free"
+    let knownPlans: [(keyword: String, label: String, exact: Bool)] = [
+        ("enterprise", "Enterprise", false),
+        ("team", "Team", false),
+        ("plus", "Plus", false),
+        ("pro", "Pro", false),
+        ("go", "Go", true),
+        ("free", "Free", false),
+    ]
+    if let match = knownPlans.first(where: { plan in
+        plan.exact ? normalized == plan.keyword : normalized.contains(plan.keyword)
+    }) {
+        return match.label
     }
 
     return rawPlanType.prefix(1).uppercased() + rawPlanType.dropFirst()

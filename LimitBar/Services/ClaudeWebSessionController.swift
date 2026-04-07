@@ -7,6 +7,7 @@ protocol ClaudeWebSessionControlling: AnyObject, Sendable {
     func prepareLoginPage()
     func clearSession() async throws
     func fetchUsageResponse(organizationUUID: String?) async -> ClaudeWebFetchResult?
+    func fetchSubscriptionDetailsResponse(organizationUUID: String?) async -> ClaudeWebFetchResult?
     func cachedUsageResponse(organizationUUID: String?) -> ClaudeWebFetchResult?
 }
 
@@ -93,6 +94,18 @@ final class ClaudeWebSessionController: NSObject, ObservableObject, @unchecked S
         return usageResultsByOrganization[organizationUUID]
     }
 
+    func fetchSubscriptionDetailsResponse(organizationUUID: String?) async -> ClaudeWebFetchResult? {
+        do {
+            try await ensureUsagePageLoaded()
+            return try await execute(
+                script: Self.subscriptionDetailsScript,
+                arguments: ["organizationUUID": organizationUUID as Any]
+            )
+        } catch {
+            return nil
+        }
+    }
+
     private func ensureUsagePageLoaded() async throws {
         if internalWebView.url?.host == "claude.ai", internalWebView.isLoading == false {
             return
@@ -167,6 +180,33 @@ final class ClaudeWebSessionController: NSObject, ObservableObject, @unchecked S
         }
 
         const response = await fetch(`/api/organizations/${resolvedOrg}/usage`, {
+          credentials: 'include',
+          headers: { Accept: 'application/json, text/plain, */*' }
+        });
+
+        return {
+          status: response.status,
+          body: await response.text(),
+          url: window.location.href,
+          organizationUUID: resolvedOrg
+        };
+        """
+
+    private static let subscriptionDetailsScript = """
+        const argOrg = arguments.organizationUUID ?? null;
+        const cookieMatch = document.cookie.match(/(?:^|;\\s*)lastActiveOrg=([^;]+)/);
+        const resolvedOrg = argOrg ?? (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null);
+
+        if (!resolvedOrg) {
+          return {
+            status: 0,
+            body: '',
+            url: window.location.href,
+            organizationUUID: null
+          };
+        }
+
+        const response = await fetch(`/api/organizations/${resolvedOrg}/subscription_details`, {
           credentials: 'include',
           headers: { Accept: 'application/json, text/plain, */*' }
         });

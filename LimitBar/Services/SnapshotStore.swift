@@ -68,7 +68,12 @@ final class SnapshotStore: @unchecked Sendable {
     private let url: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
-    private(set) var lastLoadIssue: String?
+    private let lock = NSLock()
+    private var _lastLoadIssue: String?
+
+    var lastLoadIssue: String? {
+        lock.withLock { _lastLoadIssue }
+    }
 
     init(fileManager: FileManager = .default) throws {
         self.fileManager = fileManager
@@ -107,14 +112,14 @@ final class SnapshotStore: @unchecked Sendable {
     }
 
     func load() -> PersistedState {
-        lastLoadIssue = nil
+        lock.withLock { _lastLoadIssue = nil }
         guard let data = try? Data(contentsOf: url) else {
             return PersistedState(accounts: [], snapshots: [])
         }
         do {
             return try decoder.decode(PersistedState.self, from: data)
         } catch {
-            lastLoadIssue = recoverCorruptedStateFile(after: error)
+            lock.withLock { _lastLoadIssue = recoverCorruptedStateFile(after: error) }
             return PersistedState(accounts: [], snapshots: [])
         }
     }
@@ -122,7 +127,7 @@ final class SnapshotStore: @unchecked Sendable {
     func save(_ state: PersistedState) throws {
         let data = try encoder.encode(state)
         try data.write(to: url, options: .atomic)
-        lastLoadIssue = nil
+        lock.withLock { _lastLoadIssue = nil }
     }
 
     func reset() throws {

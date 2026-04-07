@@ -13,7 +13,7 @@ protocol RenewalNotificationScheduling: Sendable {
 }
 
 struct RenewalReminderScheduler {
-    private enum ReminderOffset: CaseIterable {
+    private enum ReminderOffset: CaseIterable, Equatable {
         case days7
         case days3
         case days1
@@ -98,7 +98,12 @@ struct RenewalReminderScheduler {
                 return nil
             }
 
-            let fireDate = expiryDate.addingTimeInterval(-offset.timeInterval)
+            let fireDate: Date
+            if offset == .sameDay {
+                fireDate = Calendar.current.startOfDay(for: expiryDate)
+            } else {
+                fireDate = expiryDate.addingTimeInterval(-offset.timeInterval)
+            }
             guard fireDate > now else {
                 return nil
             }

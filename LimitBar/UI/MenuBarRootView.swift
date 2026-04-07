@@ -2,7 +2,8 @@ import SwiftUI
 
 func accountsSectionMaxHeight(for accountCount: Int) -> CGFloat {
     let visibleRows = min(max(accountCount, 1), 3)
-    let estimatedRowHeight: CGFloat = 112
+    // Conservative max that covers header + summary + full metrics + note
+    let estimatedRowHeight: CGFloat = 140
     let estimatedSpacing: CGFloat = 4
     return (CGFloat(visibleRows) * estimatedRowHeight) + (CGFloat(max(visibleRows - 1, 0)) * estimatedSpacing)
 }
@@ -57,16 +58,17 @@ struct MenuBarRootView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                CodexMarkView(size: .compact)
-                Text("LimitBar")
+                LimitBarLogoView(size: .compact)
+                Text("Limit Bar")
                     .font(.system(size: 13, weight: .semibold))
+                if let lastRefreshAt = appModel.lastRefreshAt {
+                    Text("· \(localizedRelativeDate(lastRefreshAt, language: appModel.resolvedLanguage))")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 Spacer()
-                statusIndicator
-            }
-            if let lastRefreshAt = appModel.lastRefreshAt {
-                Text(appModel.strings.updated(localizedRelativeDate(lastRefreshAt, language: appModel.resolvedLanguage)))
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.tertiary)
+                headerSettingsButton
             }
             if let persistenceErrorMessage = appModel.persistenceErrorMessage, !persistenceErrorMessage.isEmpty {
                 Text(persistenceErrorMessage)
@@ -86,15 +88,15 @@ struct MenuBarRootView: View {
         .padding(.bottom, 7)
     }
 
-    private var statusIndicator: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(appModel.codexRunning ? Color.green : Color.secondary)
-                .frame(width: 6, height: 6)
-            Text(appModel.codexRunning ? appModel.strings.codexRunning : appModel.strings.codexNotRunning)
-                .font(.system(size: 10.5))
-                .foregroundStyle(.secondary)
+    private var headerSettingsButton: some View {
+        SettingsLink {
+            Image(systemName: "gearshape")
+                .font(.system(size: 12.5, weight: .medium))
+                .frame(width: 28, height: 24)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(HeaderIconButtonStyle())
+        .help(appModel.strings.settings)
     }
 
     // MARK: - Accounts
@@ -105,7 +107,7 @@ struct MenuBarRootView: View {
                 emptyAccountsView
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
+                    LazyVStack(alignment: .leading, spacing: 6) {
                         ForEach(appModel.sortedAccounts) { account in
                             let snapshot = appModel.snapshots.last { $0.accountId == account.id }
                             let metadata = appModel.metadata(for: account.id)
@@ -113,7 +115,7 @@ struct MenuBarRootView: View {
                                 account: account,
                                 snapshot: snapshot,
                                 metadata: metadata,
-                                isActive: appModel.isActiveCodexAccount(account),
+                                isActive: appModel.isActiveAccount(account),
                                 canSwitch: appModel.canSwitch(to: account),
                                 onDelete: {
                                     accountPendingDeletion = account
@@ -152,27 +154,6 @@ struct MenuBarRootView: View {
 
     private var actionsSection: some View {
         VStack(spacing: 0) {
-            menuActionButton(appModel.strings.refreshNow, systemImage: "arrow.clockwise") {
-                appModel.refreshNow()
-            }
-
-            menuActionButton(appModel.strings.openCodex, systemImage: "terminal") {
-                appModel.openCodex()
-            }
-
-            SettingsLink {
-                Label(appModel.strings.settings, systemImage: "gearshape")
-                    .font(.system(size: 12.5))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(PopupActionButtonStyle())
-
-            sectionDivider
-                .padding(.vertical, 2)
-
             menuActionButton(appModel.strings.quit, systemImage: "power", role: .destructive) {
                 NSApplication.shared.terminate(nil)
             }
@@ -203,6 +184,22 @@ struct MenuBarRootView: View {
         Rectangle()
             .fill(Color.primary.opacity(0.07))
             .frame(height: 0.5)
+    }
+}
+
+private struct HeaderIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.primary.opacity(configuration.isPressed ? 0.1 : 0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

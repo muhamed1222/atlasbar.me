@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import WebKit
 @testable import LimitBar
 
 private struct FakeClaudeCredentialsReader: ClaudeCredentialsReading {
@@ -34,6 +35,31 @@ private struct SequencedCurrentUsageProvider: CurrentUsageProviding {
     }
 }
 
+@MainActor
+private final class LocalFakeClaudeWebSessionController: ClaudeWebSessionControlling {
+    var webView: WKWebView { WKWebView(frame: .zero) }
+    var resultByOrganization: [String: ClaudeWebFetchResult] = [:]
+    var subscriptionResultByOrganization: [String: ClaudeWebFetchResult] = [:]
+
+    func prepareLoginPage() {}
+    func clearSession() async throws {
+        resultByOrganization.removeAll()
+        subscriptionResultByOrganization.removeAll()
+    }
+    func fetchUsageResponse(organizationUUID: String?) async -> ClaudeWebFetchResult? {
+        guard let organizationUUID else { return nil }
+        return resultByOrganization[organizationUUID]
+    }
+    func fetchSubscriptionDetailsResponse(organizationUUID: String?) async -> ClaudeWebFetchResult? {
+        guard let organizationUUID else { return nil }
+        return subscriptionResultByOrganization[organizationUUID]
+    }
+    func cachedUsageResponse(organizationUUID: String?) -> ClaudeWebFetchResult? {
+        guard let organizationUUID else { return nil }
+        return resultByOrganization[organizationUUID]
+    }
+}
+
 struct ClaudeUsagePipelineTests {
     @Test
     func webProviderParsesClaudeUsageIntoPercents() async {
@@ -47,19 +73,34 @@ struct ClaudeUsagePipelineTests {
             cookieStore: FakeClaudeCookieStore(cookie: "sessionKey=test-cookie"),
             performRequest: { request in
                 #expect(request.value(forHTTPHeaderField: "Cookie") == "sessionKey=test-cookie")
-                #expect(request.url?.absoluteString == "https://claude.ai/api/organizations/org-123/usage")
-                let body = """
-                {
-                  "five_hour": {
-                    "remaining_percent": 71,
-                    "reset_at": "2026-04-03T10:00:00Z"
-                  },
-                  "seven_day": {
-                    "remaining_percent": 43,
-                    "reset_at": "2026-04-05T10:00:00Z"
-                  }
+                let body: Data
+                switch request.url?.absoluteString {
+                case "https://claude.ai/api/organizations/org-123/usage":
+                    body = """
+                    {
+                      "five_hour": {
+                        "utilization": 29,
+                        "resets_at": "2026-04-03T10:00:00Z"
+                      },
+                      "seven_day": {
+                        "utilization": 57,
+                        "resets_at": "2026-04-05T10:00:00Z"
+                      }
+                    }
+                    """.data(using: .utf8)!
+                case "https://claude.ai/api/organizations/org-123/subscription_details":
+                    body = """
+                    {
+                      "next_charge_date": "2026-04-22",
+                      "status": "active",
+                      "billing_interval": "monthly",
+                      "currency": "USD"
+                    }
+                    """.data(using: .utf8)!
+                default:
+                    Issue.record("Unexpected URL: \(request.url?.absoluteString ?? "nil")")
+                    body = Data()
                 }
-                """.data(using: .utf8)!
                 let response = HTTPURLResponse(
                     url: request.url!,
                     statusCode: 200,
@@ -79,6 +120,7 @@ struct ClaudeUsagePipelineTests {
         #expect(payload?.weeklyPercentUsed == 57)
         #expect(payload?.usageStatus == .available)
         #expect(payload?.nextResetAt == ISO8601DateFormatter().date(from: "2026-04-03T10:00:00Z"))
+        #expect(payload?.subscriptionExpiresAt == parseClaudeCalendarDate("2026-04-22"))
     }
 
     @Test
@@ -148,5 +190,56 @@ struct ClaudeUsagePipelineTests {
         #expect(payload?.weeklyPercentUsed == 58)
         #expect(payload?.totalTokensToday == 12_000)
         #expect(payload?.totalTokensThisWeek == 54_000)
+    }
+
+    @Test @MainActor
+    func webViewProviderParsesClaudeSubscriptionRenewalDate() async {
+        let credentials = ClaudeCredentials(
+            subscriptionType: "pro",
+            accountIdentifier: "outcastsdev@gmail.com",
+            organizationUUID: "org-123"
+        )
+        let controller = LocalFakeClaudeWebSessionController()
+        controller.resultByOrganization["org-123"] = ClaudeWebFetchResult(
+            status: 200,
+            body: """
+            {
+              "five_hour": {
+                "utilization": 29,
+                "resets_at": "2026-04-03T10:00:00Z"
+              },
+              "seven_day": {
+                "utilization": 57,
+                "resets_at": "2026-04-05T10:00:00Z"
+              }
+            }
+            """,
+            url: "https://claude.ai/settings/usage",
+            organizationUUID: "org-123"
+        )
+        controller.subscriptionResultByOrganization["org-123"] = ClaudeWebFetchResult(
+            status: 200,
+            body: """
+            {
+              "next_charge_date": "2026-04-22",
+              "status": "active",
+              "billing_interval": "monthly",
+              "currency": "USD"
+            }
+            """,
+            url: "https://claude.ai/settings/billing",
+            organizationUUID: "org-123"
+        )
+
+        let provider = ClaudeWebViewUsageProvider(
+            credentialsReader: FakeClaudeCredentialsReader(credentials: credentials),
+            sessionController: controller
+        )
+
+        let payload = await provider.fetchCurrentUsage()
+
+        #expect(payload?.sessionPercentUsed == 29)
+        #expect(payload?.weeklyPercentUsed == 57)
+        #expect(payload?.subscriptionExpiresAt == parseClaudeCalendarDate("2026-04-22"))
     }
 }
