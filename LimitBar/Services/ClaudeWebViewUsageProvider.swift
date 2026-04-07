@@ -44,7 +44,7 @@ struct ClaudeWebViewUsageProvider: CurrentUsageProviding {
                 usageStatus: payload.usageStatus,
                 sourceConfidence: 0.98,
                 rawExtractedStrings: [],
-                provider: "Claude",
+                provider: .claude,
                 totalTokensToday: nil,
                 totalTokensThisWeek: nil
             )

@@ -2,7 +2,7 @@ import Foundation
 
 struct Account: Identifiable, Codable, Equatable {
     let id: UUID
-    var provider: String
+    var provider: Provider
     var email: String?
     var label: String?
 
@@ -17,13 +17,11 @@ struct Account: Identifiable, Codable, Equatable {
     }
 
     var identityKey: String {
-        let providerKey = provider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return "\(providerKey)::\(normalizedIdentifier ?? "__unknown__")"
+        "\(provider.id)::\(normalizedIdentifier ?? "__unknown__")"
     }
 
-    func matchesIdentity(provider: String, identifier: String?) -> Bool {
-        let providerKey = provider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard self.provider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == providerKey else {
+    func matchesIdentity(provider: Provider, identifier: String?) -> Bool {
+        guard self.provider == provider else {
             return false
         }
 

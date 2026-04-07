@@ -30,7 +30,7 @@ struct ClaudeUsageProvider: CurrentUsageProviding {
             usageStatus: .available,
             sourceConfidence: credentials != nil ? 1.0 : 0.5,
             rawExtractedStrings: [],
-            provider: "Claude",
+            provider: .claude,
             totalTokensToday: stats.totalTokensToday > 0 ? stats.totalTokensToday : nil,
             totalTokensThisWeek: stats.totalTokensThisWeek > 0 ? stats.totalTokensThisWeek : nil
         )

@@ -109,7 +109,7 @@ func makeAccountRowPresentation(
     }
 
     var chips: [PresentationChip] = [
-        PresentationChip(text: account.provider, tone: .secondary, style: .outlined)
+        PresentationChip(text: account.provider.name, tone: .secondary, style: .outlined)
     ]
     let resetAccent = resetAccent(for: snapshot, now: now, language: language)
 
@@ -154,7 +154,7 @@ func makeAccountRowPresentation(
     }
 
     var tokenSyncText: String? = syncText
-    if account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame, let snapshot {
+    if account.provider.isClaude, let snapshot {
         if let tokensToday = snapshot.totalTokensToday {
             let formatted = strings.formattedTokens(tokensToday)
             tokenSyncText = "\(strings.tokensToday): \(formatted)"
@@ -186,7 +186,7 @@ func makeAccountsListRowPresentation(
     language: ResolvedAppLanguage = .english
 ) -> AccountsListRowPresentation {
     var chips: [PresentationChip] = [
-        PresentationChip(text: account.provider, tone: .secondary, style: .outlined)
+        PresentationChip(text: account.provider.name, tone: .secondary, style: .outlined)
     ]
 
     if let snapshot {
@@ -230,7 +230,7 @@ func makeAccountDetailPresentation(
     let strings = AppStrings(language: language)
     var identityRows = [
         AccountDetailPresentation.IdentityRow(title: strings.account, value: account.displayName),
-        AccountDetailPresentation.IdentityRow(title: strings.provider, value: account.provider),
+        AccountDetailPresentation.IdentityRow(title: strings.provider, value: account.provider.name),
         AccountDetailPresentation.IdentityRow(title: strings.subscription, value: subscriptionText(for: snapshot, now: now, language: language))
     ]
 
@@ -279,7 +279,7 @@ func makeAccountDetailPresentation(
 
     return AccountDetailPresentation(
         title: account.displayName,
-        providerLine: "\(strings.provider): \(account.provider)",
+        providerLine: "\(strings.provider): \(account.provider.name)",
         planLabel: planBadgeText(for: snapshot?.planType),
         priorityChip: metadata.priority == .none
             ? nil
@@ -294,7 +294,7 @@ func makeAccountDetailPresentation(
     )
 }
 
-private func usageBarsPresentation(snapshot: UsageSnapshot?, provider _: String) -> [UsageBarPresentation] {
+private func usageBarsPresentation(snapshot: UsageSnapshot?, provider _: Provider) -> [UsageBarPresentation] {
     guard let snapshot else {
         return []
     }
@@ -463,7 +463,7 @@ private func dataQualityState(for account: Account, snapshot: UsageSnapshot) -> 
 }
 
 private func isLocalOnlySnapshot(account: Account, snapshot: UsageSnapshot) -> Bool {
-    guard account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame else {
+    guard account.provider.isClaude else {
         return false
     }
 

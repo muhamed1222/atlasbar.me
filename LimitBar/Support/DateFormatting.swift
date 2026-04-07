@@ -122,10 +122,10 @@ func compactMenuBarLabel(snapshot: UsageSnapshot, language: ResolvedAppLanguage 
 
 func compactMenuBarLabel(
     snapshot: UsageSnapshot,
-    provider: String,
+    provider: Provider,
     language: ResolvedAppLanguage = .english
 ) -> String {
-    if provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame {
+    if provider.isClaude {
         if let session = snapshot.sessionPercentUsed {
             return "\(Int(remainingPercent(from: session)))%"
         }
@@ -135,7 +135,7 @@ func compactMenuBarLabel(
 }
 
 struct CompactMenuBarItem: Equatable {
-    var provider: String
+    var provider: Provider
     var label: String
 }
 
@@ -150,27 +150,21 @@ func compactMenuBarItems(
     let knownProviders = accountProviders.union(snapshotProviders)
 
     guard !knownProviders.isEmpty else {
-        return [CompactMenuBarItem(provider: Provider.codex.name, label: "--")]
+        return [CompactMenuBarItem(provider: .codex, label: "--")]
     }
 
-    var orderedProviders: [String] = []
-    if knownProviders.contains(where: { $0.caseInsensitiveCompare(Provider.codex.name) == .orderedSame }) {
-        orderedProviders.append(Provider.codex.name)
+    var orderedProviders: [Provider] = []
+    if knownProviders.contains(.codex) {
+        orderedProviders.append(.codex)
     }
-    if knownProviders.contains(where: { $0.caseInsensitiveCompare(Provider.claude.name) == .orderedSame }) {
-        orderedProviders.append(Provider.claude.name)
+    if knownProviders.contains(.claude) {
+        orderedProviders.append(.claude)
     }
-
-    let extraProviders = knownProviders.filter { provider in
-        provider.caseInsensitiveCompare(Provider.codex.name) != .orderedSame
-            && provider.caseInsensitiveCompare(Provider.claude.name) != .orderedSame
-    }.sorted()
-    orderedProviders.append(contentsOf: extraProviders)
 
     return orderedProviders.map { provider in
         let latestSnapshot = snapshots
             .filter { snapshot in
-                accountsById[snapshot.accountId]?.provider.caseInsensitiveCompare(provider) == .orderedSame
+                accountsById[snapshot.accountId]?.provider == provider
             }
             .max(by: { ($0.lastSyncedAt ?? .distantPast) < ($1.lastSyncedAt ?? .distantPast) })
 

@@ -20,6 +20,14 @@ macOS menu bar app for tracking Codex and Claude usage across accounts.
 - Claude Code or a Claude web session if you want Claude usage
 - no Accessibility permission is required for the current data paths
 
+## Architecture Notes
+
+- The current product spec is in `docs/current-product-spec.md`.
+- Current implementation is `local-auth/session-first`, not Accessibility-first.
+- The architecture decision record is in `docs/adr/2026-04-07-local-auth-session-first-architecture.md`.
+- Security, trust boundary, and release constraints are documented in `docs/security-and-distribution.md`.
+- The original Accessibility-oriented product spec is kept for historical context in `atlasbar_TZ.md`.
+
 ## Run On Another Mac
 
 1. Clone the repository:

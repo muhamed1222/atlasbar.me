@@ -92,12 +92,12 @@ struct UsageStateCoordinator: Sendable {
     }
 
     func markProviderStale(
-        _ provider: String,
+        _ provider: Provider,
         from state: PersistedState
     ) throws -> UsageStateProjection {
         let providerAccountIds = Set(
             state.accounts
-                .filter { $0.provider.caseInsensitiveCompare(provider) == .orderedSame }
+                .filter { $0.provider == provider }
                 .map(\.id)
         )
 
@@ -135,7 +135,7 @@ struct UsageStateCoordinator: Sendable {
     }
 
     func markAccountStale(
-        provider: String,
+        provider: Provider,
         identifier: String?,
         from state: PersistedState
     ) throws -> UsageStateProjection {
@@ -231,7 +231,7 @@ struct UsageStateCoordinator: Sendable {
         var snapshots = state.snapshots.filter { $0.accountId != accountId } + [snapshot]
         var accountMetadata = state.accountMetadata
 
-        if payload.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame,
+        if payload.provider.isClaude,
            let normalizedIdentifier = payload.normalizedAccountIdentifier,
            normalizedIdentifier.contains("@") {
             let cleanup = cleanupLegacyClaudeAccounts(
@@ -332,10 +332,10 @@ struct UsageStateCoordinator: Sendable {
 
     private func upsertAccount(
         identifier: String?,
-        provider: String,
+        provider: Provider,
         accounts: inout [Account]
     ) -> UUID {
-        let providerIsClaude = provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame
+        let providerIsClaude = provider.isClaude
         if let identifier,
            let idx = accounts.firstIndex(where: { $0.matchesIdentity(provider: provider, identifier: identifier) }) {
             return accounts[idx].id
@@ -345,7 +345,7 @@ struct UsageStateCoordinator: Sendable {
            let identifier,
            identifier.contains("@"),
            let legacyIndex = accounts.firstIndex(where: { account in
-               guard account.provider.caseInsensitiveCompare(provider) == .orderedSame else { return false }
+               guard account.provider == provider else { return false }
                return isLegacyClaudePlaceholder(account)
            }) {
             accounts[legacyIndex].email = identifier
@@ -385,7 +385,7 @@ struct UsageStateCoordinator: Sendable {
         var removedIds = Set<UUID>()
 
         let groupedClaudeAccounts = state.accounts.filter {
-            $0.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame
+            $0.provider.isClaude
         }
 
         let emailAccounts = groupedClaudeAccounts.filter { $0.email != nil }
@@ -437,7 +437,7 @@ struct UsageStateCoordinator: Sendable {
     }
 
     private func isLegacyClaudePlaceholder(_ account: Account) -> Bool {
-        guard account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame,
+        guard account.provider.isClaude,
               account.email == nil else {
             return false
         }

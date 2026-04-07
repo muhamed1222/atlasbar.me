@@ -189,8 +189,19 @@ struct AppStrings {
     var offline: String { tr(en: "Offline", ru: "Офлайн") }
     var openCodexToStartTracking: String { tr(en: "Open Codex or connect Claude to start tracking", ru: "Откройте Codex или подключите Claude, чтобы начать отслеживание") }
     var readingUsageData: String { tr(en: "Reading Codex and Claude usage…", ru: "Читаю usage-данные Codex и Claude…") }
-    var refreshNow: String { tr(en: "Refresh now", ru: "Обновить сейчас") }
-    var openCodex: String { tr(en: "Open Codex", ru: "Открыть Codex") }
+    var emptyAccountsTitle: String { tr(en: "No tracked accounts yet", ru: "Пока нет отслеживаемых аккаунтов") }
+    var emptyAccountsConnectHint: String {
+        tr(
+            en: "Open Codex or connect Claude Web in Settings -> General to start tracking usage.",
+            ru: "Откройте Codex или подключите Claude Web в Settings -> General, чтобы начать отслеживание usage."
+        )
+    }
+    var emptyAccountsReadingHint: String {
+        tr(
+            en: "LimitBar is waiting for the first successful usage refresh.",
+            ru: "LimitBar ждёт первое успешное обновление usage-данных."
+        )
+    }
     var settings: String { tr(en: "Settings…", ru: "Настройки…") }
     var quit: String { tr(en: "Quit", ru: "Выход") }
     var codexRunning: String { tr(en: "Codex running", ru: "Codex запущен") }

@@ -115,7 +115,7 @@ struct ClaudeUsagePipelineTests {
 
         #expect(payload?.accountIdentifier == "outcastsdev@gmail.com")
         #expect(payload?.planType == "pro")
-        #expect(payload?.provider == "Claude")
+        #expect(payload?.provider == .claude)
         #expect(payload?.sessionPercentUsed == 29)
         #expect(payload?.weeklyPercentUsed == 57)
         #expect(payload?.usageStatus == .available)
@@ -135,7 +135,7 @@ struct ClaudeUsagePipelineTests {
             usageStatus: .available,
             sourceConfidence: 0.6,
             rawExtractedStrings: [],
-            provider: "Claude",
+            provider: .claude,
             totalTokensToday: 12_000,
             totalTokensThisWeek: 54_000
         )
@@ -161,7 +161,7 @@ struct ClaudeUsagePipelineTests {
             usageStatus: .available,
             sourceConfidence: 0.6,
             rawExtractedStrings: [],
-            provider: "Claude",
+            provider: .claude,
             totalTokensToday: 12_000,
             totalTokensThisWeek: 54_000
         )
@@ -175,7 +175,7 @@ struct ClaudeUsagePipelineTests {
             usageStatus: .available,
             sourceConfidence: 0.95,
             rawExtractedStrings: [],
-            provider: "Claude",
+            provider: .claude,
             totalTokensToday: nil,
             totalTokensThisWeek: nil
         )

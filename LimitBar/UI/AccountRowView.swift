@@ -115,7 +115,7 @@ struct AccountRowView: View {
     }
 
     private var claudeTokenDials: (today: Int, week: Int)? {
-        guard account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame,
+        guard account.provider.isClaude,
               let today = presentation.totalTokensToday,
               let week = presentation.totalTokensThisWeek,
               week > 0 else { return nil }

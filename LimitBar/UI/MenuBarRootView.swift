@@ -145,18 +145,22 @@ struct MenuBarRootView: View {
 
     private var emptyAccountsView: some View {
         VStack(spacing: 8) {
-            if !appModel.codexRunning {
-                Label(appModel.strings.openCodexToStartTracking, systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Label(appModel.strings.readingUsageData, systemImage: "arrow.clockwise")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Image(systemName: appModel.codexRunning ? "arrow.clockwise.circle" : "tray")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            Text(appModel.strings.emptyAccountsTitle)
+                .font(.system(size: 12.5, weight: .semibold))
+
+            Text(appModel.codexRunning ? appModel.strings.emptyAccountsReadingHint : appModel.strings.emptyAccountsConnectHint)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
-        .padding(14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 18)
     }
 
     // MARK: - Actions

@@ -63,7 +63,7 @@ private enum CompactStatusLabelRenderer {
         return fallback
     }
 
-    private static func iconImage(for provider: String) -> NSImage {
+    private static func iconImage(for provider: Provider) -> NSImage {
         let renderer = ImageRenderer(
             content: ProviderMarkView(provider: provider, size: .compact, style: .glyphOnly)
                 .foregroundStyle(Color.black)

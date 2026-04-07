@@ -33,12 +33,12 @@ struct LimitBarLogoView: View {
 }
 
 struct ProviderMarkView: View {
-    let provider: String
+    let provider: Provider
     var size: CodexMarkView.Size = .compact
     var style: CodexMarkView.Style = .standard
 
     var body: some View {
-        if provider.caseInsensitiveCompare("Claude") == .orderedSame {
+        if provider.isClaude {
             ClaudeMarkView(size: size, style: style)
         } else {
             CodexMarkView(size: size, style: style)

@@ -1,5 +1,9 @@
 # Техническое задание: LimitBar
 
+> Исторический baseline-документ. Текущая реализация ушла от `Accessibility-first` подхода к `local-auth/session-first` архитектуре.
+> Актуальное архитектурное решение зафиксировано в `docs/adr/2026-04-07-local-auth-session-first-architecture.md`.
+> Актуальный продуктовый spec находится в `docs/current-product-spec.md`.
+
 ## 1. Название проекта
 **LimitBar**
 

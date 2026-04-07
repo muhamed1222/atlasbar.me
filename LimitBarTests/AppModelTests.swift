@@ -387,8 +387,8 @@ struct AppModelTests {
 
     @Test
     func compactMenuBarItemsShowBothProvidersInStableOrder() {
-        let codex = Account(id: UUID(), provider: Provider.codex.name, email: "codex@example.com", label: nil)
-        let claude = Account(id: UUID(), provider: Provider.claude.name, email: "claude@example.com", label: nil)
+        let codex = Account(id: UUID(), provider: .codex, email: "codex@example.com", label: nil)
+        let claude = Account(id: UUID(), provider: .claude, email: "claude@example.com", label: nil)
 
         let codexSnapshot = UsageSnapshot(
             id: UUID(),
@@ -425,15 +425,15 @@ struct AppModelTests {
                 accounts: [codex, claude],
                 snapshots: [codexSnapshot, claudeSnapshot]
             ) == [
-                CompactMenuBarItem(provider: Provider.codex.name, label: "90%"),
-                CompactMenuBarItem(provider: Provider.claude.name, label: "85%")
+                CompactMenuBarItem(provider: .codex, label: "90%"),
+                CompactMenuBarItem(provider: .claude, label: "85%")
             ]
         )
     }
 
     @Test
     func compactMenuBarItemsPreferPercentageOverCountdown() {
-        let claude = Account(id: UUID(), provider: Provider.claude.name, email: "claude@example.com", label: nil)
+        let claude = Account(id: UUID(), provider: .claude, email: "claude@example.com", label: nil)
 
         let claudeSnapshot = UsageSnapshot(
             id: UUID(),
@@ -452,15 +452,15 @@ struct AppModelTests {
 
         #expect(
             compactMenuBarItems(accounts: [claude], snapshots: [claudeSnapshot]) == [
-                CompactMenuBarItem(provider: Provider.claude.name, label: "75%")
+                CompactMenuBarItem(provider: .claude, label: "75%")
             ]
         )
     }
 
     @Test
     func compactMenuBarItemsShowPlaceholderForProviderWithoutSnapshot() {
-        let codex = Account(id: UUID(), provider: Provider.codex.name, email: "codex@example.com", label: nil)
-        let claude = Account(id: UUID(), provider: Provider.claude.name, email: "claude@example.com", label: nil)
+        let codex = Account(id: UUID(), provider: .codex, email: "codex@example.com", label: nil)
+        let claude = Account(id: UUID(), provider: .claude, email: "claude@example.com", label: nil)
 
         let codexSnapshot = UsageSnapshot(
             id: UUID(),
@@ -479,8 +479,8 @@ struct AppModelTests {
 
         #expect(
             compactMenuBarItems(accounts: [codex, claude], snapshots: [codexSnapshot]) == [
-                CompactMenuBarItem(provider: Provider.codex.name, label: "90%"),
-                CompactMenuBarItem(provider: Provider.claude.name, label: "--")
+                CompactMenuBarItem(provider: .codex, label: "90%"),
+                CompactMenuBarItem(provider: .claude, label: "--")
             ]
         )
     }
@@ -489,7 +489,7 @@ struct AppModelTests {
     func compactMenuBarProviderFallsBackToCodexWithoutSnapshots() {
         #expect(
             compactMenuBarItems(accounts: [], snapshots: []) == [
-                CompactMenuBarItem(provider: Provider.codex.name, label: "--")
+                CompactMenuBarItem(provider: .codex, label: "--")
             ]
         )
     }
@@ -536,7 +536,7 @@ struct AppModelTests {
             usageStatus: .available,
             sourceConfidence: 1.0,
             rawExtractedStrings: [],
-            provider: Provider.codex.name
+            provider: .codex
         )
         let claudePayload = CurrentUsagePayload(
             accountIdentifier: sharedEmail,
@@ -548,7 +548,7 @@ struct AppModelTests {
             usageStatus: .available,
             sourceConfidence: 1.0,
             rawExtractedStrings: [],
-            provider: Provider.claude.name,
+            provider: .claude,
             totalTokensToday: 1200,
             totalTokensThisWeek: 8400
         )
@@ -563,7 +563,7 @@ struct AppModelTests {
         await model.refreshNowAsync()
 
         #expect(model.accounts.count == 2)
-        #expect(Set(model.accounts.map(\.provider)) == Set([Provider.codex.name, Provider.claude.name]))
+        #expect(Set(model.accounts.map(\.provider)) == Set<Provider>([.codex, .claude]))
         #expect(Set(model.snapshots.map(\.accountId)).count == 2)
     }
 
@@ -571,7 +571,7 @@ struct AppModelTests {
     func refreshMigratesLegacyClaudePlaceholderToEmailIdentity() async {
         let legacyClaude = Account(
             id: UUID(),
-            provider: Provider.claude.name,
+            provider: .claude,
             email: nil,
             label: "Claude Pro"
         )
@@ -603,7 +603,7 @@ struct AppModelTests {
             usageStatus: .available,
             sourceConfidence: 1.0,
             rawExtractedStrings: [],
-            provider: Provider.claude.name,
+            provider: .claude,
             totalTokensToday: 1200,
             totalTokensThisWeek: 8400
         )
@@ -629,13 +629,13 @@ struct AppModelTests {
     func initDropsLegacyClaudePlaceholderWhenEmailAccountAlreadyExists() {
         let legacyClaude = Account(
             id: UUID(),
-            provider: Provider.claude.name,
+            provider: .claude,
             email: nil,
             label: "Claude Pro"
         )
         let emailClaude = Account(
             id: UUID(),
-            provider: Provider.claude.name,
+            provider: .claude,
             email: "outcastsdev@gmail.com",
             label: nil
         )
@@ -1369,7 +1369,7 @@ struct AppModelTests {
             usageStatus: .available,
             sourceConfidence: 0.98,
             rawExtractedStrings: [],
-            provider: Provider.claude.name,
+            provider: .claude,
             totalTokensToday: 1200,
             totalTokensThisWeek: 4500
         )
@@ -1385,7 +1385,7 @@ struct AppModelTests {
         await model.refreshNowAsync()
 
         #expect(model.accounts.count == 1)
-        #expect(model.accounts.first?.provider == Provider.claude.name)
+        #expect(model.accounts.first?.provider == .claude)
         #expect(model.snapshots.first?.subscriptionExpiresAt == renewalDate)
         #expect(notifications.renewalScheduled.count == 2)
         #expect(Set(notifications.cancelledIdentifiers) == Set(RenewalReminderScheduler().reminderIdentifiers(for: model.accounts[0].id)))
@@ -1449,13 +1449,13 @@ struct AppModelTests {
         let now = Date()
         let activeAccount = Account(
             id: UUID(),
-            provider: Provider.codex.name,
+            provider: .codex,
             email: "active@example.com",
             label: nil
         )
         let backupAccount = Account(
             id: UUID(),
-            provider: Provider.codex.name,
+            provider: .codex,
             email: "backup@example.com",
             label: nil
         )
@@ -1687,7 +1687,7 @@ struct AppModelTests {
                 usageStatus: .available,
                 sourceConfidence: 1,
                 rawExtractedStrings: [],
-                provider: Provider.codex.name
+                provider: .codex
             ),
             delayNanoseconds: 150_000_000
         )
@@ -1726,13 +1726,13 @@ struct AppModelTests {
     func persistenceErrorMessageIsExposedWhenInitialNormalizationSaveFails() {
         let canonicalAccount = Account(
             id: UUID(),
-            provider: Provider.claude.name,
+            provider: .claude,
             email: "outcastsdev@gmail.com",
             label: nil
         )
         let legacyAccount = Account(
             id: UUID(),
-            provider: Provider.claude.name,
+            provider: .claude,
             email: nil,
             label: "Claude Code"
         )
@@ -1781,13 +1781,13 @@ struct AppModelTests {
     func refreshMarksOnlyClaudeSnapshotsStaleWhenClaudeFetchFails() async throws {
         let codexAccount = Account(
             id: UUID(),
-            provider: Provider.codex.name,
+            provider: .codex,
             email: "codex@example.com",
             label: nil
         )
         let claudeAccount = Account(
             id: UUID(),
-            provider: Provider.claude.name,
+            provider: .claude,
             email: "claude@example.com",
             label: nil
         )
@@ -1832,7 +1832,7 @@ struct AppModelTests {
             usageStatus: .available,
             sourceConfidence: 1.0,
             rawExtractedStrings: [],
-            provider: Provider.codex.name
+            provider: .codex
         )
         let model = AppModel(
             usageProvider: FakeCurrentUsageProvider(result: codexPayload),
@@ -2020,13 +2020,13 @@ struct AppModelTests {
 
         let claudeAccount = Account(
             id: UUID(),
-            provider: Provider.claude.name,
+            provider: .claude,
             email: "shared@example.com",
             label: nil
         )
         let codexAccount = Account(
             id: UUID(),
-            provider: Provider.codex.name,
+            provider: .codex,
             email: "shared@example.com",
             label: nil
         )
@@ -2045,7 +2045,7 @@ struct AppModelTests {
 
         let claudeAccount = Account(
             id: UUID(),
-            provider: Provider.claude.name,
+            provider: .claude,
             email: nil,
             label: "Claude Workspace"
         )
@@ -2057,7 +2057,7 @@ struct AppModelTests {
     func initRecoversExpiredCodexSnapshotToPredictedReset() {
         let account = Account(
             id: UUID(),
-            provider: Provider.codex.name,
+            provider: .codex,
             email: "codex@example.com",
             label: nil
         )
@@ -2097,7 +2097,7 @@ struct AppModelTests {
     func refreshRecoversExpiredCodexSnapshotWhenUsageFetchFails() async {
         let account = Account(
             id: UUID(),
-            provider: Provider.codex.name,
+            provider: .codex,
             email: "codex@example.com",
             label: nil
         )

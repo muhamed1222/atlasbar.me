@@ -15,6 +15,10 @@ struct UsageRefreshOutcome: Equatable {
     let claudeWebSessionStatus: ClaudeWebSessionStatusProjection?
 }
 
+protocol UsageRefreshing: Sendable {
+    func refresh(from state: PersistedState) async -> UsageRefreshOutcome
+}
+
 struct UsageRefreshCoordinator: Sendable {
     private let usageProvider: any CurrentUsageProviding
     private let claudeUsageProvider: (any CurrentUsageProviding)?
@@ -72,7 +76,7 @@ struct UsageRefreshCoordinator: Sendable {
 
         let codexStep = await Self.applyProviderRefresh(
             payload: codexUsage,
-            provider: Provider.codex.name,
+            provider: .codex,
             staleIdentifier: activeCodexEmail,
             state: workingState,
             stateCoordinator: stateCoordinator
@@ -84,7 +88,7 @@ struct UsageRefreshCoordinator: Sendable {
 
         let claudeStep = await Self.applyProviderRefresh(
             payload: claudeUsage,
-            provider: Provider.claude.name,
+            provider: .claude,
             staleIdentifier: nil,
             state: workingState,
             stateCoordinator: stateCoordinator
@@ -115,7 +119,7 @@ struct UsageRefreshCoordinator: Sendable {
 
     private static func applyProviderRefresh(
         payload: CurrentUsagePayload?,
-        provider: String,
+        provider: Provider,
         staleIdentifier: String?,
         state: PersistedState,
         stateCoordinator: UsageStateCoordinator
@@ -131,7 +135,7 @@ struct UsageRefreshCoordinator: Sendable {
                         shouldReconcileCooldownNotifications: false
                     )
                 } catch {
-                    refreshLogger.error("Failed to apply \(provider, privacy: .public) refresh: \(error)")
+                    refreshLogger.error("Failed to apply \(provider.name, privacy: .public) refresh: \(error)")
                     return ProviderRefreshStepResult(
                         state: state,
                         persistenceErrorDetails: error.localizedDescription,
@@ -143,7 +147,7 @@ struct UsageRefreshCoordinator: Sendable {
 
             do {
                 let projection: UsageStateProjection
-                if provider.caseInsensitiveCompare(Provider.codex.name) == .orderedSame,
+                if provider.isCodex,
                    let staleIdentifier {
                     projection = try stateCoordinator.markAccountStale(
                         provider: provider,
@@ -155,7 +159,7 @@ struct UsageRefreshCoordinator: Sendable {
                 }
 
                 let hasProviderAccounts = projection.accounts.contains {
-                    $0.provider.caseInsensitiveCompare(provider) == .orderedSame
+                    $0.provider == provider
                 }
                 return ProviderRefreshStepResult(
                     state: projection.persistedState,
@@ -164,7 +168,7 @@ struct UsageRefreshCoordinator: Sendable {
                     shouldReconcileCooldownNotifications: hasProviderAccounts
                 )
             } catch {
-                refreshLogger.error("Failed to mark \(provider, privacy: .public) usage stale: \(error)")
+                refreshLogger.error("Failed to mark \(provider.name, privacy: .public) usage stale: \(error)")
                 return ProviderRefreshStepResult(
                     state: state,
                     persistenceErrorDetails: error.localizedDescription,
@@ -220,6 +224,8 @@ struct UsageRefreshCoordinator: Sendable {
         }.value
     }
 }
+
+extension UsageRefreshCoordinator: UsageRefreshing {}
 
 private struct ProviderRefreshStepResult {
     let state: PersistedState

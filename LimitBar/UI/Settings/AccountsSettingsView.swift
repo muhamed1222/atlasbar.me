@@ -75,7 +75,7 @@ struct AccountsSettingsView: View {
                             detailRow(row.title, value: row.value)
                         }
 
-                        if account.provider.caseInsensitiveCompare(Provider.claude.name) == .orderedSame {
+                        if account.provider.isClaude {
                             HStack {
                                 Text(strings.emailLabel)
                                 Spacer()
