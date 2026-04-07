@@ -106,30 +106,39 @@ struct MenuBarRootView: View {
             if appModel.accounts.isEmpty {
                 emptyAccountsView
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 6) {
-                        ForEach(appModel.sortedAccounts) { account in
-                            let snapshot = appModel.snapshots.last { $0.accountId == account.id }
-                            let metadata = appModel.metadata(for: account.id)
-                            AccountRowView(
-                                account: account,
-                                snapshot: snapshot,
-                                metadata: metadata,
-                                isActive: appModel.isActiveAccount(account),
-                                canSwitch: appModel.canSwitch(to: account),
-                                onDelete: {
-                                    accountPendingDeletion = account
-                                    isShowingDeleteConfirmation = true
-                                },
-                                onSwitch: { appModel.switchToAccount(account) },
-                                language: appModel.resolvedLanguage
-                            )
-                                .padding(.horizontal, 8)
-                        }
+                if appModel.sortedAccounts.count <= 3 {
+                    accountsRows
+                        .padding(.vertical, 2)
+                } else {
+                    ScrollView {
+                        accountsRows
+                            .padding(.vertical, 2)
                     }
-                    .padding(.vertical, 2)
+                    .frame(height: accountsSectionMaxHeight(for: appModel.sortedAccounts.count))
                 }
-                .frame(maxHeight: accountsSectionMaxHeight(for: appModel.sortedAccounts.count))
+            }
+        }
+    }
+
+    private var accountsRows: some View {
+        LazyVStack(alignment: .leading, spacing: 6) {
+            ForEach(appModel.sortedAccounts) { account in
+                let snapshot = appModel.snapshots.last { $0.accountId == account.id }
+                let metadata = appModel.metadata(for: account.id)
+                AccountRowView(
+                    account: account,
+                    snapshot: snapshot,
+                    metadata: metadata,
+                    isActive: appModel.isActiveAccount(account),
+                    canSwitch: appModel.canSwitch(to: account),
+                    onDelete: {
+                        accountPendingDeletion = account
+                        isShowingDeleteConfirmation = true
+                    },
+                    onSwitch: { appModel.switchToAccount(account) },
+                    language: appModel.resolvedLanguage
+                )
+                .padding(.horizontal, 8)
             }
         }
     }
