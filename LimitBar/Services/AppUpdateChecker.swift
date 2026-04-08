@@ -1,13 +1,5 @@
 import Foundation
 
-private struct GitHubLatestRelease: Decodable {
-    let tagName: String
-
-    enum CodingKeys: String, CodingKey {
-        case tagName = "tag_name"
-    }
-}
-
 struct AppUpdateInfo: Equatable, Sendable {
     let version: String
     let downloadURL: URL
@@ -21,7 +13,7 @@ actor GitHubAppUpdateChecker: AppUpdateChecking {
     typealias RequestPerformer = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
     static let defaultDownloadURL = URL(string: "https://limitbar.netlify.app/download/macos")!
-    private static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/muhamed1222/atlasbar.me/releases/latest")!
+    private static let latestReleasePageURL = URL(string: "https://github.com/muhamed1222/atlasbar.me/releases/latest")!
 
     private let requestPerformer: RequestPerformer
     private let now: @Sendable () -> Date
@@ -52,20 +44,21 @@ actor GitHubAppUpdateChecker: AppUpdateChecking {
         }
         lastCheckedAt = currentTime
 
-        var request = URLRequest(url: Self.latestReleaseAPIURL)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        var request = URLRequest(url: Self.latestReleasePageURL)
         request.setValue("LimitBar/\(currentVersion)", forHTTPHeaderField: "User-Agent")
 
         do {
-            let (data, response) = try await requestPerformer(request)
+            let (_, response) = try await requestPerformer(request)
             guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
                 return cachedResult
             }
-            let release = try JSONDecoder().decode(GitHubLatestRelease.self, from: data)
-            let latestVersion = Self.normalizedVersion(release.tagName)
-            let currentVersion = Self.normalizedVersion(currentVersion)
+            guard let latestTag = Self.latestTag(from: httpResponse.url) else {
+                return cachedResult
+            }
+            let latestVersion = Self.normalizedVersion(latestTag)
+            let normalizedCurrentVersion = Self.normalizedVersion(currentVersion)
 
-            guard Self.isVersion(latestVersion, newerThan: currentVersion) else {
+            guard Self.isVersion(latestVersion, newerThan: normalizedCurrentVersion) else {
                 cachedResult = nil
                 return nil
             }
@@ -76,6 +69,19 @@ actor GitHubAppUpdateChecker: AppUpdateChecking {
         } catch {
             return cachedResult
         }
+    }
+
+    private static func latestTag(from url: URL?) -> String? {
+        guard let url else { return nil }
+        let components = url.pathComponents
+        guard
+            let releasesIndex = components.firstIndex(of: "releases"),
+            releasesIndex + 2 < components.count,
+            components[releasesIndex + 1] == "tag"
+        else {
+            return nil
+        }
+        return components[releasesIndex + 2]
     }
 
     static func normalizedVersion(_ rawVersion: String) -> String {

@@ -21,14 +21,13 @@ struct AppUpdateCheckerTests {
     func returnsUpdateWhenLatestReleaseIsNewer() async {
         let checker = GitHubAppUpdateChecker(
             requestPerformer: { _ in
-                let data = #"{"tag_name":"v0.1.1"}"#.data(using: .utf8)!
                 let response = HTTPURLResponse(
-                    url: URL(string: "https://api.github.com")!,
+                    url: URL(string: "https://github.com/muhamed1222/atlasbar.me/releases/tag/v0.1.1")!,
                     statusCode: 200,
                     httpVersion: nil,
                     headerFields: nil
                 )!
-                return (data, response)
+                return (Data(), response)
             },
             minimumCheckInterval: 0,
             downloadURL: URL(string: "https://limitbar.netlify.app/download/macos")!
@@ -46,14 +45,13 @@ struct AppUpdateCheckerTests {
     func returnsNilWhenLatestReleaseMatchesCurrentVersion() async {
         let checker = GitHubAppUpdateChecker(
             requestPerformer: { _ in
-                let data = #"{"tag_name":"v0.1.0"}"#.data(using: .utf8)!
                 let response = HTTPURLResponse(
-                    url: URL(string: "https://api.github.com")!,
+                    url: URL(string: "https://github.com/muhamed1222/atlasbar.me/releases/tag/v0.1.0")!,
                     statusCode: 200,
                     httpVersion: nil,
                     headerFields: nil
                 )!
-                return (data, response)
+                return (Data(), response)
             },
             minimumCheckInterval: 0
         )
@@ -93,14 +91,13 @@ struct AppUpdateCheckerTests {
         let checker = GitHubAppUpdateChecker(
             requestPerformer: { _ in
                 await counter.increment()
-                let data = #"{"tag_name":"v0.1.1"}"#.data(using: .utf8)!
                 let response = HTTPURLResponse(
-                    url: URL(string: "https://api.github.com")!,
+                    url: URL(string: "https://github.com/muhamed1222/atlasbar.me/releases/tag/v0.1.1")!,
                     statusCode: 200,
                     httpVersion: nil,
                     headerFields: nil
                 )!
-                return (data, response)
+                return (Data(), response)
             },
             now: { clock.now() },
             minimumCheckInterval: 900
