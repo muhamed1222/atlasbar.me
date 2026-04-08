@@ -82,6 +82,9 @@ struct MenuBarRootView: View {
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let availableUpdate = appModel.availableUpdate {
+                updateBanner(availableUpdate)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.top, 8)
@@ -97,6 +100,30 @@ struct MenuBarRootView: View {
         }
         .buttonStyle(HeaderIconButtonStyle())
         .help(appModel.strings.settings)
+    }
+
+    private func updateBanner(_ update: AppUpdateInfo) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(appModel.strings.updateAvailableTitle)
+                    .font(.system(size: 11.5, weight: .semibold))
+                Text(appModel.strings.updateAvailableVersion(update.version))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(appModel.strings.downloadUpdate) {
+                appModel.openAvailableUpdate()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.accentColor.opacity(0.11))
+        )
     }
 
     // MARK: - Accounts

@@ -203,6 +203,8 @@ struct AppStrings {
         )
     }
     var settings: String { tr(en: "Settings…", ru: "Настройки…") }
+    var updateAvailableTitle: String { tr(en: "Update available", ru: "Доступно обновление") }
+    var downloadUpdate: String { tr(en: "Download update", ru: "Скачать обновление") }
     var quit: String { tr(en: "Quit", ru: "Выход") }
     var codexRunning: String { tr(en: "Codex running", ru: "Codex запущен") }
     var codexNotRunning: String { tr(en: "Codex not running", ru: "Codex не запущен") }
@@ -246,6 +248,15 @@ struct AppStrings {
             return "\(value) days"
         case .russian:
             return "\(value) дн."
+        }
+    }
+
+    func updateAvailableVersion(_ version: String) -> String {
+        switch language {
+        case .english:
+            return "Version \(version) is ready to install."
+        case .russian:
+            return "Версия \(version) готова к установке."
         }
     }
 

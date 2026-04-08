@@ -25,9 +25,10 @@ targets:
         CFBundleName: LimitBar
         CFBundleDisplayName: LimitBar
         CFBundleIdentifier: me.atlasbar.LimitBar
-        CFBundleVersion: "1"
-        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "2"
+        CFBundleShortVersionString: "0.1.1"
         LSUIElement: YES
+        LSApplicationCategoryType: public.app-category.developer-tools
         NSPrincipalClass: NSApplication
         NSUserNotificationUsageDescription: "LimitBar sends notifications when tracked Codex or Claude accounts become available again or need renewal attention."
     settings:

@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import AppKit
 import WebKit
 
 private let logger = Logger(subsystem: "me.atlasbar.LimitBar", category: "AppModel")
@@ -29,6 +30,7 @@ final class AppModel: ObservableObject {
     @Published var claudeWebSessionConnected: Bool = false
     @Published var claudeWebSessionErrorMessage: String?
     @Published var persistenceErrorMessage: String?
+    @Published var availableUpdate: AppUpdateInfo?
 
     var resolvedLanguage: ResolvedAppLanguage {
         settings.language.resolved()
@@ -55,6 +57,7 @@ final class AppModel: ObservableObject {
     private let presentationRuntime: AppPresentationRuntime
     private let accountSessionStateRuntime: AccountSessionStateRuntime
     private let accountSwitchRuntime: AccountSwitchRuntime
+    private let appUpdateChecker: any AppUpdateChecking
     private let settingsCoordinator = SettingsCoordinator()
     private let vault: any AccountVaulting
     private let sessionSwitcher: any CodexSessionSwitching
@@ -74,6 +77,7 @@ final class AppModel: ObservableObject {
         claudeCredentialsReader: (any ClaudeCredentialsReading)? = nil,
         claudeSessionCookieStore: (any ClaudeSessionCookieStoring)? = nil,
         claudeWebSessionController: (any ClaudeWebSessionControlling)? = nil,
+        appUpdateChecker: (any AppUpdateChecking)? = nil,
         shouldStartPolling: Bool = AppRuntimeDefaults.shouldStartPolling
     ) {
         self.usageProvider = usageProvider
@@ -84,6 +88,7 @@ final class AppModel: ObservableObject {
         self.vault = vault ?? AccountVault()
         self.sessionSwitcher = sessionSwitcher ?? CodexSessionSwitcher(vault: self.vault)
         self.accountSwitchRuntime = AccountSwitchRuntime(sessionSwitcher: self.sessionSwitcher)
+        self.appUpdateChecker = appUpdateChecker ?? GitHubAppUpdateChecker()
         let resolvedClaudeCredentialsReader = claudeCredentialsReader ?? ClaudeKeychainReader()
 
         let resolvedStore: (any SnapshotStoring)?
@@ -159,6 +164,7 @@ final class AppModel: ObservableObject {
         if claudeSessionRuntime.isAvailable {
             Task { await refreshClaudeWebSessionStatus() }
         }
+        Task { await refreshAppUpdateAvailability() }
     }
 
     deinit {
@@ -366,6 +372,11 @@ final class AppModel: ObservableObject {
         Task { await switchToAccountAsync(account) }
     }
 
+    func openAvailableUpdate() {
+        guard let availableUpdate else { return }
+        NSWorkspace.shared.open(availableUpdate.downloadURL)
+    }
+
     func switchToAccountAsync(_ account: Account) async {
         switchingAccountId = account.id
         switchErrorMessage = nil
@@ -449,11 +460,17 @@ final class AppModel: ObservableObject {
         }
         compactLabel = result.compactLabel
         menuBarState = result.menuBarState
+        await refreshAppUpdateAvailability()
     }
 
     private func applyClaudeWebSessionStatus(_ projection: ClaudeWebSessionStatusProjection) {
         claudeWebSessionConnected = projection.isConnected
         claudeWebSessionErrorMessage = projection.errorMessage
+    }
+
+    private func refreshAppUpdateAvailability() async {
+        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
+        availableUpdate = await appUpdateChecker.checkForUpdate(currentVersion: currentVersion)
     }
 
     private var currentPersistedState: PersistedState {

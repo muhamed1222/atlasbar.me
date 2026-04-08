@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		000CA34AF35B898C3107E2B2 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A9BFDD095E95499A9C4530 /* AppModel.swift */; };
 		01359C5BCBF789FC41FED647 /* UsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C164AA402ACACC390EA816F /* UsageSnapshot.swift */; };
+		05DA50DF922C7A6AA7C2435C /* AppUpdateCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E11B11DCB1A74E40AFA64E5 /* AppUpdateCheckerTests.swift */; };
 		06B4D72A7C0E3E51B5A4F4A4 /* DateFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF3FDAA0619317B4AFBEF92 /* DateFormatting.swift */; };
 		19A0850AA24A914B446C1551 /* DailyResetRecoveryCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31B392E7B76E10B71648DF00 /* DailyResetRecoveryCoordinatorTests.swift */; };
 		1ECCDCF605B3832DC261DC3D /* ClaudeWebUsageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F447DD2F87B58F2C5866B3BA /* ClaudeWebUsageProvider.swift */; };
@@ -43,6 +44,7 @@
 		72619BD6BA9FD6F2B8904C3C /* MenuBarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23294C05EFC5FFDDB143BD48 /* MenuBarState.swift */; };
 		72EE208B0F92873C4FDA5E1A /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3654EDDF62406C64F5B2F8A3 /* AppLocalization.swift */; };
 		7439643F74002D5F651794A9 /* MenuBarRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E9007C18D37983040223454 /* MenuBarRootView.swift */; };
+		7553DE0BDE361C24C5216FBE /* AppUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEB4075616689B619AF23DDF /* AppUpdateChecker.swift */; };
 		7780E174472047C5BD0BE7C5 /* ProcessWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF2D60AE143070CC312AE9A /* ProcessWatcher.swift */; };
 		7DF673E502895D68E17246AF /* AccountVaultTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6540D1375034396E1DA5C2CC /* AccountVaultTests.swift */; };
 		80941ABDA5024DE0B0C24CAE /* CompactStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EA2B5DBAC8FC765289D27F /* CompactStatusView.swift */; };
@@ -104,6 +106,7 @@
 		23294C05EFC5FFDDB143BD48 /* MenuBarState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarState.swift; sourceTree = "<group>"; };
 		2434FAED548D7499EFC4C60C /* RefreshEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshEngine.swift; sourceTree = "<group>"; };
 		27D9163DA52E8208E1E76D22 /* DailyResetRecoveryCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyResetRecoveryCoordinator.swift; sourceTree = "<group>"; };
+		2E11B11DCB1A74E40AFA64E5 /* AppUpdateCheckerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateCheckerTests.swift; sourceTree = "<group>"; };
 		31B392E7B76E10B71648DF00 /* DailyResetRecoveryCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyResetRecoveryCoordinatorTests.swift; sourceTree = "<group>"; };
 		3654EDDF62406C64F5B2F8A3 /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
 		377E7FB82AE37F9227B3628A /* ClaudeWebSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeWebSessionController.swift; sourceTree = "<group>"; };
@@ -144,6 +147,7 @@
 		A9C48C136B3513178CE57B51 /* ClaudeSessionRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSessionRuntime.swift; sourceTree = "<group>"; };
 		ABA72AB830DF51911BE3DF70 /* SubscriptionDerivedState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionDerivedState.swift; sourceTree = "<group>"; };
 		AD45F1B79960C49D7535A3D8 /* ClaudeUsagePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeUsagePipeline.swift; sourceTree = "<group>"; };
+		AEB4075616689B619AF23DDF /* AppUpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateChecker.swift; sourceTree = "<group>"; };
 		B2F653673F09CFBEF46B10A9 /* SettingsCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCoordinatorTests.swift; sourceTree = "<group>"; };
 		B551F489AECA1073707DB87A /* RenewalReminderSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenewalReminderSchedulerTests.swift; sourceTree = "<group>"; };
 		B79C91D5D5380CCEBA1200A8 /* ClaudeDesktopCookieReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeDesktopCookieReader.swift; sourceTree = "<group>"; };
@@ -192,6 +196,7 @@
 				0C76606907EF997E7F34A27E /* AppModelTests.swift */,
 				729664773C367248B81E1F7D /* AppPresentationRuntimeTests.swift */,
 				D7F84E0F7341BB546E1239A0 /* AppStartupAndClaudeSessionRuntimeTests.swift */,
+				2E11B11DCB1A74E40AFA64E5 /* AppUpdateCheckerTests.swift */,
 				685C2D31370FB93F8D063F7F /* ClaudeUsageCoordinatorTests.swift */,
 				52A415DE83D6D578AAA70248 /* CodexSessionSwitcherTests.swift */,
 				31B392E7B76E10B71648DF00 /* DailyResetRecoveryCoordinatorTests.swift */,
@@ -299,6 +304,7 @@
 			isa = PBXGroup;
 			children = (
 				9092F0B804C9CD4C1D0D0EFF /* AccountVault.swift */,
+				AEB4075616689B619AF23DDF /* AppUpdateChecker.swift */,
 				B79C91D5D5380CCEBA1200A8 /* ClaudeDesktopCookieReader.swift */,
 				98CC4277ED0B02EDE6CEF7B6 /* ClaudeJSONLReader.swift */,
 				DBC3B890160453FC09556E33 /* ClaudeKeychainReader.swift */,
@@ -421,6 +427,7 @@
 				4FEAF8AB2BC859D2C6841A2E /* AppModelTests.swift in Sources */,
 				BB44FC93C14EAB6D82EBA9FE /* AppPresentationRuntimeTests.swift in Sources */,
 				EA368E3FE7B97542BF000AD7 /* AppStartupAndClaudeSessionRuntimeTests.swift in Sources */,
+				05DA50DF922C7A6AA7C2435C /* AppUpdateCheckerTests.swift in Sources */,
 				4E9E2E7E6F95A72BA2577645 /* ClaudeUsageCoordinatorTests.swift in Sources */,
 				C1F37FF408B09D618834F51F /* CodexSessionSwitcherTests.swift in Sources */,
 				19A0850AA24A914B446C1551 /* DailyResetRecoveryCoordinatorTests.swift in Sources */,
@@ -452,6 +459,7 @@
 				FB862CC50F6478C7ACFBF6BF /* AppSettingsState.swift in Sources */,
 				21294B1D1243565E092AB019 /* AppStartupRuntime.swift in Sources */,
 				D65C96D0872D590A3FA78400 /* AppStateSideEffectsRuntime.swift in Sources */,
+				7553DE0BDE361C24C5216FBE /* AppUpdateChecker.swift in Sources */,
 				A0476510169AFD4861F9D5EF /* ClaudeDesktopCookieReader.swift in Sources */,
 				D2C6A19CEDA566ECA736ED70 /* ClaudeJSONLReader.swift in Sources */,
 				CFF767A2F914026226D5CDCC /* ClaudeKeychainReader.swift in Sources */,
