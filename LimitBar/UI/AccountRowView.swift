@@ -14,7 +14,7 @@ struct AccountRowView: View {
     private let detailRowHeight: CGFloat = 24
     private let detailRowSpacing: CGFloat = 3
     private let metricsBlockPadding: CGFloat = 3
-    private let detailTitleWidth: CGFloat = 84
+    private let detailTitleWidth: CGFloat = 76
 
     private var metricsBlockHeight: CGFloat {
         (detailRowHeight * 3) + (detailRowSpacing * 2) + (metricsBlockPadding * 2)
@@ -256,7 +256,7 @@ struct AccountRowView: View {
                 weeklyLockBlock
             case .normal:
                 if let resetAccent = presentation.resetAccent {
-                    detailRow(
+                    accentDetailRow(
                         title: strings.reset,
                         value: resetAccent.countdownValue,
                         tone: resetAccent.countdownTone.color
@@ -325,7 +325,7 @@ struct AccountRowView: View {
     private var sessionCooldownBlock: some View {
         Group {
             if let resetAccent = presentation.resetAccent {
-                detailRow(
+                accentDetailRow(
                     title: resetAccent.title,
                     value: resetAccent.countdownValue,
                     tone: resetAccent.countdownTone.color
@@ -349,7 +349,7 @@ struct AccountRowView: View {
     private var weeklyLockBlock: some View {
         Group {
             if let resetAccent = presentation.resetAccent {
-                detailRow(
+                accentDetailRow(
                     title: resetAccent.title,
                     value: resetAccent.countdownValue,
                     tone: resetAccent.countdownTone.color
@@ -545,6 +545,35 @@ struct AccountRowView: View {
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.primary.opacity(0.028))
+        )
+    }
+
+    private func accentDetailRow(title: String, value: String, tone: Color) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(tone.opacity(0.82))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .frame(width: detailTitleWidth, alignment: .leading)
+
+            Spacer(minLength: 0)
+
+            Text(value)
+                .font(.system(size: 10.5, weight: .bold))
+                .foregroundStyle(tone)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: detailRowHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(tone.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(tone.opacity(0.18), lineWidth: 1)
         )
     }
 

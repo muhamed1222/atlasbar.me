@@ -20,8 +20,8 @@ struct CompactStatusView: View {
 
 @MainActor
 private enum CompactStatusLabelRenderer {
-    private static let iconSize = NSSize(width: 15, height: 15)
-    private static let itemSpacing: CGFloat = 6
+    private static let iconSize = NSSize(width: 14, height: 14)
+    private static let itemSpacing: CGFloat = 5
 
     private static var cachedItems: [CompactMenuBarItem] = []
     private static var cachedImage: NSImage?
@@ -44,7 +44,7 @@ private enum CompactStatusLabelRenderer {
                         HStack(spacing: itemSpacing) {
                             Image(nsImage: iconImage(for: item.provider))
                             Text(item.label)
-                                .font(.system(size: 13, weight: .regular))
+                                .font(.system(size: 12.5, weight: .medium))
                                 .monospacedDigit()
                         }
                     }

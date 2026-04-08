@@ -56,14 +56,14 @@ struct MenuBarRootView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 LimitBarLogoView(size: .compact)
                 Text("Limit Bar")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 13.5, weight: .semibold))
                 if let lastRefreshAt = appModel.lastRefreshAt {
                     Text("· \(localizedRelativeDate(lastRefreshAt, language: appModel.resolvedLanguage))")
-                        .font(.system(size: 10))
+                        .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -71,16 +71,18 @@ struct MenuBarRootView: View {
                 headerSettingsButton
             }
             if let persistenceErrorMessage = appModel.persistenceErrorMessage, !persistenceErrorMessage.isEmpty {
-                Text(persistenceErrorMessage)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                statusBanner(
+                    persistenceErrorMessage,
+                    systemImage: "exclamationmark.triangle.fill",
+                    tone: .red
+                )
             }
             if let switchErrorMessage = appModel.switchErrorMessage, !switchErrorMessage.isEmpty {
-                Text(switchErrorMessage)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                statusBanner(
+                    switchErrorMessage,
+                    systemImage: "arrow.triangle.2.circlepath.circle.fill",
+                    tone: .orange
+                )
             }
             if let availableUpdate = appModel.availableUpdate {
                 updateBanner(availableUpdate)
@@ -102,9 +104,48 @@ struct MenuBarRootView: View {
         .help(appModel.strings.settings)
     }
 
+    private func statusBanner(
+        _ message: String,
+        systemImage: String,
+        tone: Color
+    ) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(tone)
+                .frame(width: 16, height: 16)
+
+            Text(message)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(tone.opacity(0.09))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(tone.opacity(0.14), lineWidth: 1)
+        )
+    }
+
     private func updateBanner(_ update: AppUpdateInfo) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .top, spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.14))
+                        .frame(width: 22, height: 22)
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(appModel.strings.updateAvailableTitle)
                         .font(.system(size: 11.5, weight: .semibold))
@@ -130,7 +171,7 @@ struct MenuBarRootView: View {
                 Text(releaseNotes)
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -144,32 +185,62 @@ struct MenuBarRootView: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.vertical, 9)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.accentColor.opacity(0.11))
+                .fill(Color.accentColor.opacity(0.09))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.13), lineWidth: 1)
         )
     }
 
     // MARK: - Accounts
 
     private var accountsSection: some View {
-        Group {
-            if appModel.accounts.isEmpty {
-                emptyAccountsView
-            } else {
-                if appModel.sortedAccounts.count <= 3 {
-                    accountsRows
-                        .padding(.vertical, 2)
+        VStack(alignment: .leading, spacing: 8) {
+            accountsHeader
+
+            Group {
+                if appModel.accounts.isEmpty {
+                    emptyAccountsView
                 } else {
-                    ScrollView {
+                    if appModel.sortedAccounts.count <= 3 {
                         accountsRows
                             .padding(.vertical, 2)
+                    } else {
+                        ScrollView {
+                            accountsRows
+                                .padding(.vertical, 2)
+                        }
+                        .frame(height: accountsSectionMaxHeight(for: appModel.sortedAccounts.count))
                     }
-                    .frame(height: accountsSectionMaxHeight(for: appModel.sortedAccounts.count))
                 }
             }
         }
+    }
+
+    private var accountsHeader: some View {
+        HStack(spacing: 8) {
+            Text(appModel.strings.accounts)
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+
+            Text("\(appModel.sortedAccounts.count)")
+                .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.primary.opacity(0.05))
+                )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
     }
 
     private var accountsRows: some View {
@@ -223,8 +294,8 @@ struct MenuBarRootView: View {
                 NSApplication.shared.terminate(nil)
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
     }
 
     @ViewBuilder
@@ -236,7 +307,7 @@ struct MenuBarRootView: View {
     ) -> some View {
         Button(role: role, action: action) {
             Label(title, systemImage: systemImage)
-                .font(.system(size: 12.5))
+                .font(.system(size: 12, weight: .medium))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
                 .padding(.horizontal, 8)

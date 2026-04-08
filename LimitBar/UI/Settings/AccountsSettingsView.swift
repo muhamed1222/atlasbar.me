@@ -12,6 +12,7 @@ struct AccountsSettingsView: View {
                 accountListRow(account)
                 .tag(account.id)
             }
+            .listStyle(.sidebar)
             .frame(minWidth: 240)
 
             Group {
@@ -61,7 +62,7 @@ struct AccountsSettingsView: View {
         )
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 accountSummaryCard(account: account, presentation: presentation)
 
                 Form {
@@ -146,6 +147,8 @@ struct AccountsSettingsView: View {
                 }
                 .formStyle(.grouped)
             }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
         }
         .padding(.top, 8)
     }
@@ -153,10 +156,14 @@ struct AccountsSettingsView: View {
     private func detailRow(_ title: String, value: String) -> some View {
         HStack {
             Text(title)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.secondary)
             Spacer()
             Text(value)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(.primary)
         }
+        .padding(.vertical, 2)
     }
 
     private func accountListRow(_ account: Account) -> some View {
@@ -169,11 +176,11 @@ struct AccountsSettingsView: View {
             language: appModel.resolvedLanguage
         )
 
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
                 ProviderMarkView(provider: account.provider, size: .regular, style: .elevated)
                 Text(presentation.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12.5, weight: .semibold))
                     .lineLimit(1)
 
                 if let priorityChip = presentation.priorityChip {
@@ -189,22 +196,22 @@ struct AccountsSettingsView: View {
 
             if let notePreview = presentation.notePreview {
                 Text(notePreview)
-                    .font(.caption)
+                    .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             } else if let resetAccent = presentation.resetAccent {
                 Label(resetAccent.countdownText, systemImage: "timer")
-                    .font(.caption)
+                    .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(resetAccent.countdownTone.color)
                     .lineLimit(1)
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 5)
     }
 
     private func accountSummaryCard(account: Account, presentation: AccountDetailPresentation) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(alignment: .center) {
                 HStack(alignment: .top, spacing: 10) {
                     ProviderMarkView(provider: account.provider, size: .prominent, style: .elevated)
 
@@ -213,21 +220,29 @@ struct AccountsSettingsView: View {
                             .font(.title3.weight(.semibold))
                             .lineLimit(1)
                         Text(presentation.providerLine)
-                            .font(.subheadline)
+                            .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
                 }
 
                 Spacer()
 
-                if let priorityChip = presentation.priorityChip {
-                    settingsBadge(priorityChip)
+                HStack(spacing: 6) {
+                    if appModel.isActiveAccount(account) {
+                        activeSettingsIndicator
+                    }
+
+                    if let priorityChip = presentation.priorityChip {
+                        settingsBadge(priorityChip)
+                    }
                 }
             }
 
-            HStack(spacing: 6) {
-                ForEach(Array(presentation.summaryChips.enumerated()), id: \.offset) { _, chip in
-                    settingsBadge(chip)
+            if !presentation.summaryChips.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(Array(presentation.summaryChips.enumerated()), id: \.offset) { _, chip in
+                        settingsBadge(chip)
+                    }
                 }
             }
 
@@ -238,7 +253,11 @@ struct AccountsSettingsView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.secondary.opacity(0.08))
+                .fill(Color.primary.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.07), lineWidth: 1)
         )
     }
 
@@ -288,7 +307,7 @@ struct AccountsSettingsView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.orange.opacity(0.08))
+                .fill(Color.orange.opacity(0.07))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -296,23 +315,41 @@ struct AccountsSettingsView: View {
         )
     }
 
+    private var activeSettingsIndicator: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(Color.green)
+                .frame(width: 6, height: 6)
+        }
+        .frame(width: 18, height: 18)
+        .background(
+            Circle()
+                .fill(Color.green.opacity(0.12))
+        )
+        .overlay(
+            Circle()
+                .stroke(Color.green.opacity(0.15), lineWidth: 1)
+        )
+        .help(appModel.strings.activeAccountLabel)
+    }
+
     private func settingsBadge(_ chip: PresentationChip) -> some View {
         Text(chip.text)
             .font(
                 chip.monospaced
-                    ? .system(size: 10.5, weight: .medium).monospacedDigit()
-                    : .system(size: 10.5, weight: .medium)
+                    ? .system(size: 9.5, weight: .medium).monospacedDigit()
+                    : .system(size: 9.5, weight: .medium)
             )
             .foregroundStyle(chip.tone.color)
             .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.vertical, 3)
             .background(
                 Capsule()
-                    .fill(chip.style == .filled ? chip.tone.color.opacity(0.14) : .clear)
+                    .fill(chip.style == .filled ? chip.tone.color.opacity(0.12) : .clear)
             )
             .overlay(
                 Capsule()
-                    .stroke(chip.style == .outlined ? chip.tone.color.opacity(0.25) : .clear, lineWidth: 1)
+                    .stroke(chip.style == .outlined ? chip.tone.color.opacity(0.22) : .clear, lineWidth: 1)
             )
     }
 }
