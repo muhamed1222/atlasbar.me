@@ -1,0 +1,22 @@
+- generic [active] [ref=e1]:
+  - button "Toggle color theme" [ref=e2] [cursor=pointer]
+  - main [ref=e4]:
+    - region "LimitBar, menu bar app" [ref=e5]:
+      - heading "LimitBar, menu bar app" [level=1] [ref=e7]:
+        - generic [ref=e8]: LimitBar,
+        - generic [ref=e9]: menu bar app
+      - generic [ref=e10]:
+        - paragraph [ref=e11]:
+          - text: A
+          - generic [ref=e12]: quiet
+          - text: macOS menu bar app for keeping an eye on your
+          - generic "Codex and Claude" [ref=e13]:
+            - generic "Codex" [ref=e14]
+            - generic "Claude" [ref=e15]
+          - text: usage.
+        - paragraph [ref=e16]: Track sessions, weekly limits, renewals, and account context without opening dashboards all day.
+      - generic [ref=e17]:
+        - link "Download for macOS" [ref=e18] [cursor=pointer]:
+          - /url: https://github.com/muhamed1222/atlasbar.me/releases
+        - link "GitHub" [ref=e19] [cursor=pointer]:
+          - /url: https://github.com/muhamed1222/atlasbar.me

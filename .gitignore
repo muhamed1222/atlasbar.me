@@ -22,3 +22,6 @@ default.profraw
 
 # App/runtime state
 /tmp/
+
+# Local Netlify folder
+.netlify

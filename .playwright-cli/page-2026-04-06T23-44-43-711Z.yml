@@ -1,0 +1,36 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - button "Toggle theme" [ref=e6] [cursor=pointer]:
+      - img
+    - main [ref=e7]:
+      - generic [ref=e10]:
+        - heading "Tom, Design Engineer Links" [level=1] [ref=e11]:
+          - generic [ref=e12]:
+            - generic [ref=e13]: Tom,
+            - generic [ref=e14]: Design Engineer
+          - generic [ref=e15]:
+            - img
+          - button "Links" [ref=e17] [cursor=pointer]:
+            - img
+        - generic [ref=e18]:
+          - paragraph [ref=e19]: I'm a 16 y/o design engineer who cares deeply about craft, detail, and the little things that make a difference.
+          - paragraph [ref=e20]:
+            - text: I created
+            - link "@spell_ui" [ref=e21] [cursor=pointer]:
+              - /url: https://github.com/xxtomm/spell-ui
+            - text: ", and I spend most of my time blending design and code to make"
+            - link "interfaces" [ref=e22] [cursor=pointer]:
+              - /url: /craft
+              - img
+              - text: interfaces
+            - text: that feel right.
+        - generic [ref=e23]:
+          - link "Send Message via Telegram" [ref=e24] [cursor=pointer]:
+            - /url: https://t.me/tomm_dev
+            - img
+            - generic [ref=e25]: Send Message
+          - button "Copy email address" [ref=e26] [cursor=pointer]:
+            - generic [ref=e27]:
+              - img
+            - generic [ref=e28]: Copy Email
+  - alert [ref=e29]
