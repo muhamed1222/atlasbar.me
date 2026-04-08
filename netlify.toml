@@ -3,3 +3,9 @@ publish = "website"
 
 [dev]
 publish = "website"
+
+[[redirects]]
+from = "/download/macos"
+to = "https://github.com/muhamed1222/atlasbar.me/releases/latest/download/LimitBar-macOS.zip"
+status = 302
+force = true

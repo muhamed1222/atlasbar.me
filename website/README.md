@@ -27,4 +27,10 @@ Open `http://localhost:4173`.
 - Keep the page one-screen and one-section only
 - Do not add feature grids or extra marketing sections
 - Keep `Download for macOS` as the primary CTA
-- Keep `GitHub` as the secondary CTA
+- Keep `Rate & Review` as the secondary CTA
+
+## Download routing
+
+- The primary CTA points to `/download/macos`
+- Netlify redirects `/download/macos` to the latest GitHub Release asset
+- The release asset name must stay exactly `LimitBar-macOS.zip`
