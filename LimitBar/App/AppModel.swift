@@ -377,6 +377,15 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.open(availableUpdate.downloadURL)
     }
 
+    func dismissAvailableUpdate() {
+        guard let availableUpdate else { return }
+        var updatedSettings = settings
+        updatedSettings.dismissedUpdateVersion = availableUpdate.version
+        settings = settingsCoordinator.sanitized(updatedSettings)
+        self.availableUpdate = nil
+        persistCurrentState()
+    }
+
     func switchToAccountAsync(_ account: Account) async {
         switchingAccountId = account.id
         switchErrorMessage = nil
@@ -470,7 +479,14 @@ final class AppModel: ObservableObject {
 
     private func refreshAppUpdateAvailability() async {
         let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
-        availableUpdate = await appUpdateChecker.checkForUpdate(currentVersion: currentVersion)
+        guard let update = await appUpdateChecker.checkForUpdate(currentVersion: currentVersion) else {
+            availableUpdate = nil
+            return
+        }
+
+        let dismissedVersion = settings.dismissedUpdateVersion.map(GitHubAppUpdateChecker.normalizedVersion)
+        let availableVersion = GitHubAppUpdateChecker.normalizedVersion(update.version)
+        availableUpdate = dismissedVersion == availableVersion ? nil : update
     }
 
     private var currentPersistedState: PersistedState {

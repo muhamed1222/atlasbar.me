@@ -103,20 +103,45 @@ struct MenuBarRootView: View {
     }
 
     private func updateBanner(_ update: AppUpdateInfo) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(appModel.strings.updateAvailableTitle)
-                    .font(.system(size: 11.5, weight: .semibold))
-                Text(appModel.strings.updateAvailableVersion(update.version))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(appModel.strings.updateAvailableTitle)
+                        .font(.system(size: 11.5, weight: .semibold))
+                    Text(appModel.strings.updateAvailableVersion(update.version))
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    appModel.dismissAvailableUpdate()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(appModel.strings.dismissUpdate)
+            }
+
+            if let releaseNotes = update.releaseNotes, !releaseNotes.isEmpty {
+                Text(releaseNotes)
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
-            Button(appModel.strings.downloadUpdate) {
-                appModel.openAvailableUpdate()
+
+            HStack {
+                Spacer()
+                Button(appModel.strings.downloadUpdate) {
+                    appModel.openAvailableUpdate()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)

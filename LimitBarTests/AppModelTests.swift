@@ -71,6 +71,22 @@ private struct FakeCurrentUsageProvider: CurrentUsageProviding {
     }
 }
 
+private actor FakeAppUpdateChecker: AppUpdateChecking {
+    private var update: AppUpdateInfo?
+
+    init(update: AppUpdateInfo?) {
+        self.update = update
+    }
+
+    func checkForUpdate(currentVersion: String) async -> AppUpdateInfo? {
+        update
+    }
+
+    func setUpdate(_ update: AppUpdateInfo?) {
+        self.update = update
+    }
+}
+
 private actor SlowTrackingUsageProvider: CurrentUsageProviding {
     let result: CurrentUsagePayload?
     let delayNanoseconds: UInt64
@@ -1775,6 +1791,77 @@ struct AppModelTests {
             includingPropertiesForKeys: nil
         ).filter { $0.lastPathComponent.hasPrefix("state.corrupted.") }
         #expect(backups.count == 1)
+    }
+
+    @Test
+    func dismissedUpdateVersionHidesSameAvailableRelease() async {
+        let store = InMemorySnapshotStore(
+            state: PersistedState(
+                accounts: [],
+                snapshots: [],
+                settings: AppSettingsState(
+                    pollingWhenRunning: nil,
+                    pollingWhenClosed: nil,
+                    cooldownNotificationsEnabled: true,
+                    renewalReminders: .default,
+                    dismissedUpdateVersion: "0.1.3"
+                )
+            )
+        )
+        let appUpdateChecker = FakeAppUpdateChecker(
+            update: AppUpdateInfo(
+                version: "0.1.3",
+                downloadURL: URL(string: "https://limitbar.netlify.app/download/macos")!,
+                releaseNotes: "Already dismissed."
+            )
+        )
+        let model = AppModel(
+            store: store,
+            appUpdateChecker: appUpdateChecker,
+            shouldStartPolling: false
+        )
+
+        await model.refreshNowAsync()
+
+        #expect(model.availableUpdate == nil)
+    }
+
+    @Test
+    func dismissAvailableUpdatePersistsVersionAndAllowsNewerRelease() async {
+        let store = InMemorySnapshotStore()
+        let appUpdateChecker = FakeAppUpdateChecker(
+            update: AppUpdateInfo(
+                version: "0.1.3",
+                downloadURL: URL(string: "https://limitbar.netlify.app/download/macos")!,
+                releaseNotes: "Bridge release."
+            )
+        )
+        let model = AppModel(
+            store: store,
+            appUpdateChecker: appUpdateChecker,
+            shouldStartPolling: false
+        )
+
+        await model.refreshNowAsync()
+        #expect(model.availableUpdate?.version == "0.1.3")
+
+        model.dismissAvailableUpdate()
+
+        #expect(model.availableUpdate == nil)
+        #expect(store.load().settings.dismissedUpdateVersion == "0.1.3")
+
+        await appUpdateChecker.setUpdate(
+            AppUpdateInfo(
+                version: "0.1.4",
+                downloadURL: URL(string: "https://limitbar.netlify.app/download/macos")!,
+                releaseNotes: "New fixes."
+            )
+        )
+
+        await model.refreshNowAsync()
+
+        #expect(model.availableUpdate?.version == "0.1.4")
+        #expect(model.availableUpdate?.releaseNotes == "New fixes.")
     }
 
     @Test

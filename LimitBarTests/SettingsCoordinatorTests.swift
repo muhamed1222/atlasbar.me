@@ -15,7 +15,8 @@ struct SettingsCoordinatorTests {
                 days1Enabled: false,
                 sameDayEnabled: true
             ),
-            language: .russian
+            language: .russian,
+            dismissedUpdateVersion: "0.1.3"
         )
 
         let sanitized = coordinator.sanitized(settings)
@@ -25,6 +26,7 @@ struct SettingsCoordinatorTests {
         #expect(sanitized.renewalReminders.days7Enabled == false)
         #expect(sanitized.renewalReminders.sameDayEnabled == true)
         #expect(sanitized.language == .russian)
+        #expect(sanitized.dismissedUpdateVersion == "0.1.3")
     }
 
     @Test

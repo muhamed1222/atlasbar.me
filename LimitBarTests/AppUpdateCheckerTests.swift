@@ -37,7 +37,8 @@ struct AppUpdateCheckerTests {
 
         #expect(update == AppUpdateInfo(
             version: "0.1.1",
-            downloadURL: URL(string: "https://limitbar.netlify.app/download/macos")!
+            downloadURL: URL(string: "https://limitbar.netlify.app/download/macos")!,
+            releaseNotes: nil
         ))
     }
 
@@ -110,5 +111,32 @@ struct AppUpdateCheckerTests {
         clock.set(Date(timeIntervalSince1970: 901))
         _ = await checker.checkForUpdate(currentVersion: "0.1.0")
         #expect(await counter.current() == 2)
+    }
+
+    @Test
+    func parsesReleaseNotesFromOpenGraphDescription() {
+        let html = #"""
+        <html>
+          <head>
+            <meta property="og:description" content="Small updater UX pass &amp; release notes preview for existing installs." />
+          </head>
+        </html>
+        """#
+
+        #expect(
+            GitHubAppUpdateChecker.releaseNotes(fromHTML: html)
+            == "Small updater UX pass & release notes preview for existing installs."
+        )
+    }
+
+    @Test
+    func trimsVeryLongReleaseNotes() {
+        let notes = String(repeating: "a", count: 260)
+        let html = #"<meta property="og:description" content=""# + notes + #"" />"#
+
+        let parsed = GitHubAppUpdateChecker.releaseNotes(fromHTML: html)
+
+        #expect(parsed?.count == 220)
+        #expect(parsed?.hasSuffix("…") == true)
     }
 }

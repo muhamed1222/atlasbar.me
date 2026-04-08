@@ -12,7 +12,8 @@ struct SettingsCoordinator {
             pollingWhenClosed: sanitize(settings.pollingWhenClosed, in: closedRange),
             cooldownNotificationsEnabled: settings.cooldownNotificationsEnabled,
             renewalReminders: settings.renewalReminders,
-            language: settings.language
+            language: settings.language,
+            dismissedUpdateVersion: settings.dismissedUpdateVersion
         )
     }
 

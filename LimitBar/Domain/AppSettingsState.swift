@@ -20,19 +20,22 @@ struct AppSettingsState: Codable, Equatable {
     var cooldownNotificationsEnabled: Bool
     var renewalReminders: RenewalReminderSettings
     var language: AppLanguage
+    var dismissedUpdateVersion: String?
 
     init(
         pollingWhenRunning: Double?,
         pollingWhenClosed: Double?,
         cooldownNotificationsEnabled: Bool,
         renewalReminders: RenewalReminderSettings,
-        language: AppLanguage = .system
+        language: AppLanguage = .system,
+        dismissedUpdateVersion: String? = nil
     ) {
         self.pollingWhenRunning = pollingWhenRunning
         self.pollingWhenClosed = pollingWhenClosed
         self.cooldownNotificationsEnabled = cooldownNotificationsEnabled
         self.renewalReminders = renewalReminders
         self.language = language
+        self.dismissedUpdateVersion = dismissedUpdateVersion
     }
 
     static let `default` = AppSettingsState(
@@ -40,7 +43,8 @@ struct AppSettingsState: Codable, Equatable {
         pollingWhenClosed: nil,
         cooldownNotificationsEnabled: true,
         renewalReminders: .default,
-        language: .system
+        language: .system,
+        dismissedUpdateVersion: nil
     )
 }
 
@@ -51,6 +55,7 @@ extension AppSettingsState {
         case cooldownNotificationsEnabled
         case renewalReminders
         case language
+        case dismissedUpdateVersion
     }
 
     init(from decoder: Decoder) throws {
@@ -60,6 +65,7 @@ extension AppSettingsState {
         cooldownNotificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .cooldownNotificationsEnabled) ?? true
         renewalReminders = try container.decodeIfPresent(RenewalReminderSettings.self, forKey: .renewalReminders) ?? .default
         language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
+        dismissedUpdateVersion = try container.decodeIfPresent(String.self, forKey: .dismissedUpdateVersion)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -69,5 +75,6 @@ extension AppSettingsState {
         try container.encode(cooldownNotificationsEnabled, forKey: .cooldownNotificationsEnabled)
         try container.encode(renewalReminders, forKey: .renewalReminders)
         try container.encode(language, forKey: .language)
+        try container.encodeIfPresent(dismissedUpdateVersion, forKey: .dismissedUpdateVersion)
     }
 }
