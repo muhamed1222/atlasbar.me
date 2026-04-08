@@ -28,7 +28,7 @@ struct ClaudeSessionCookieStore: ClaudeSessionCookieStoring {
     private let desktopCookieReader = ClaudeDesktopCookieReader()
 
     func hasStoredCookie() -> Bool {
-        cookieHeaderValue()?.isEmpty == false
+        storedCookieHeaderValue()?.isEmpty == false
     }
 
     func cookieHeaderValue() -> String? {

@@ -24,7 +24,12 @@ struct DailyResetRecoveryCoordinator: Sendable {
             recoveredAccountIDs.append(snapshot.accountId)
 
             var recovered = snapshot
-            recovered.sessionPercentUsed = 0
+            if isWeeklyQuotaExhausted(snapshot: snapshot) {
+                recovered.weeklyPercentUsed = 0
+                recovered.sessionPercentUsed = 0
+            } else {
+                recovered.sessionPercentUsed = 0
+            }
             recovered.usageStatus = .available
             recovered.stateOrigin = .predictedReset
             recovered.lastSyncedAt = now
@@ -33,7 +38,7 @@ struct DailyResetRecoveryCoordinator: Sendable {
 
         let nextRecoveryAt = updatedSnapshots
             .filter { shouldScheduleRecoveryTimer(for: $0, now: now) }
-            .compactMap(\.nextResetAt)
+            .compactMap { effectiveResetAt(snapshot: $0) }
             .min()
 
         if !recoveredAccountIDs.isEmpty {
@@ -51,18 +56,30 @@ struct DailyResetRecoveryCoordinator: Sendable {
     }
 
     private func shouldRecover(snapshot: UsageSnapshot, now: Date) -> Bool {
-        guard let nextResetAt = snapshot.nextResetAt else { return false }
-        guard nextResetAt <= now else { return false }
-        guard snapshot.sessionPercentUsed != nil else { return false }
+        guard let resetAt = effectiveResetAt(snapshot: snapshot) else { return false }
+        guard resetAt <= now else { return false }
+
+        if isWeeklyQuotaExhausted(snapshot: snapshot) {
+            guard snapshot.weeklyPercentUsed != nil else { return false }
+        } else {
+            guard snapshot.sessionPercentUsed != nil else { return false }
+        }
+
         return snapshot.usageStatus == .exhausted
             || snapshot.usageStatus == .coolingDown
             || snapshot.usageStatus == .stale
     }
 
     private func shouldScheduleRecoveryTimer(for snapshot: UsageSnapshot, now: Date) -> Bool {
-        guard let nextResetAt = snapshot.nextResetAt else { return false }
-        guard nextResetAt > now else { return false }
-        guard snapshot.sessionPercentUsed != nil else { return false }
+        guard let resetAt = effectiveResetAt(snapshot: snapshot) else { return false }
+        guard resetAt > now else { return false }
+
+        if isWeeklyQuotaExhausted(snapshot: snapshot) {
+            guard snapshot.weeklyPercentUsed != nil else { return false }
+        } else {
+            guard snapshot.sessionPercentUsed != nil else { return false }
+        }
+
         return snapshot.usageStatus == .exhausted
             || snapshot.usageStatus == .coolingDown
             || snapshot.usageStatus == .stale

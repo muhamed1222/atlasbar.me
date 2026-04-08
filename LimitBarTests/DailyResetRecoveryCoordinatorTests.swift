@@ -188,4 +188,76 @@ struct DailyResetRecoveryCoordinatorTests {
         #expect(outcome.snapshots[0].stateOrigin == .server)
         #expect(outcome.nextRecoveryAt == futureReset)
     }
+
+    @Test
+    func reconcileKeepsWeeklyExhaustedSnapshotBlockedUntilWeeklyReset() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let coordinator = DailyResetRecoveryCoordinator()
+        let sessionReset = now.addingTimeInterval(-60)
+        let weeklyReset = now.addingTimeInterval(12 * 60 * 60)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: UUID(),
+            sessionPercentUsed: 100,
+            weeklyPercentUsed: 100,
+            nextResetAt: sessionReset,
+            weeklyResetAt: weeklyReset,
+            subscriptionExpiresAt: nil,
+            planType: nil,
+            usageStatus: .exhausted,
+            stateOrigin: .server,
+            sourceConfidence: 1,
+            lastSyncedAt: now.addingTimeInterval(-300),
+            rawExtractedStrings: [],
+            totalTokensToday: nil,
+            totalTokensThisWeek: nil
+        )
+
+        let outcome = coordinator.reconcile(
+            snapshots: [snapshot],
+            now: now
+        )
+
+        #expect(outcome.recoveredAccountIDs.isEmpty)
+        #expect(outcome.snapshots[0].usageStatus == .exhausted)
+        #expect(outcome.snapshots[0].sessionPercentUsed == 100)
+        #expect(outcome.snapshots[0].weeklyPercentUsed == 100)
+        #expect(outcome.nextRecoveryAt == weeklyReset)
+    }
+
+    @Test
+    func reconcileRecoversWeeklyExhaustedSnapshotAtWeeklyBoundary() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let coordinator = DailyResetRecoveryCoordinator()
+        let accountId = UUID()
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: accountId,
+            sessionPercentUsed: 40,
+            weeklyPercentUsed: 100,
+            nextResetAt: now.addingTimeInterval(30 * 60),
+            weeklyResetAt: now.addingTimeInterval(-60),
+            subscriptionExpiresAt: nil,
+            planType: nil,
+            usageStatus: .exhausted,
+            stateOrigin: .server,
+            sourceConfidence: 1,
+            lastSyncedAt: now.addingTimeInterval(-300),
+            rawExtractedStrings: [],
+            totalTokensToday: nil,
+            totalTokensThisWeek: nil
+        )
+
+        let outcome = coordinator.reconcile(
+            snapshots: [snapshot],
+            now: now
+        )
+
+        #expect(outcome.recoveredAccountIDs == [accountId])
+        #expect(outcome.snapshots[0].usageStatus == .available)
+        #expect(outcome.snapshots[0].sessionPercentUsed == 0)
+        #expect(outcome.snapshots[0].weeklyPercentUsed == 0)
+        #expect(outcome.snapshots[0].stateOrigin == .predictedReset)
+        #expect(outcome.nextRecoveryAt == nil)
+    }
 }

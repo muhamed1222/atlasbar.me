@@ -19,14 +19,11 @@ struct LimitBarLogoView: View {
 
     var body: some View {
         Group {
-            if let nsImage = NSImage(named: "LimitBarLogoSymbol") {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: size.side, height: size.side)
-            } else {
-                CodexMarkView(size: size == .compact ? .compact : .regular)
-            }
+            Image("LimitBarLogoSymbol")
+                .renderingMode(.original)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: size.side, height: size.side)
         }
         .accessibilityHidden(true)
     }

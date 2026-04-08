@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/xcodebuild-clean.sh"
+PROJECT_PATH="$ROOT_DIR/LimitBar.xcodeproj"
+SCHEME="LimitBar"
+DESTINATION="${DESTINATION:-platform=macOS,arch=arm64}"
+APP_NAME="LimitBar.app"
+
+BUILD_SETTINGS="$(
+  run_xcodebuild \
+    -project "$PROJECT_PATH" \
+    -scheme "$SCHEME" \
+    -configuration Release \
+    -destination "$DESTINATION" \
+    -showBuildSettings
+)"
+
+TARGET_BUILD_DIR="$(printf '%s\n' "$BUILD_SETTINGS" | awk -F' = ' '/ TARGET_BUILD_DIR = / { print $2; exit }')"
+FULL_PRODUCT_NAME="$(printf '%s\n' "$BUILD_SETTINGS" | awk -F' = ' '/ FULL_PRODUCT_NAME = / { print $2; exit }')"
+
+if [[ -z "$TARGET_BUILD_DIR" || -z "$FULL_PRODUCT_NAME" ]]; then
+  echo "Unable to resolve release build output path." >&2
+  exit 1
+fi
+
+run_xcodebuild \
+  -project "$PROJECT_PATH" \
+  -scheme "$SCHEME" \
+  -configuration Release \
+  -destination "$DESTINATION" \
+  build >/dev/null
+
+APP_SOURCE="$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME"
+if [[ ! -d "$APP_SOURCE" ]]; then
+  echo "Release app not found in DerivedData." >&2
+  exit 1
+fi
+
+if [[ -w /Applications ]]; then
+  INSTALL_DIR="/Applications"
+else
+  INSTALL_DIR="$HOME/Applications"
+  mkdir -p "$INSTALL_DIR"
+fi
+
+APP_DESTINATION="$INSTALL_DIR/$APP_NAME"
+
+pkill -x "LimitBar" >/dev/null 2>&1 || true
+rm -rf "$APP_DESTINATION"
+ditto "$APP_SOURCE" "$APP_DESTINATION"
+open "$APP_DESTINATION"
+codesign --verify --deep --strict "$APP_DESTINATION"
+
+echo "Installed to $APP_DESTINATION"

@@ -1,5 +1,10 @@
 import Foundation
 
+enum ResetWindowKind: Equatable {
+    case session
+    case weekly
+}
+
 func remainingPercent(from usedPercent: Double) -> Double {
     min(max(100 - usedPercent, 0), 100)
 }
@@ -26,32 +31,67 @@ func countdownString(until date: Date, now: Date = .now, language: ResolvedAppLa
     return "\(minutes)m"
 }
 
+func isSessionQuotaExhausted(snapshot: UsageSnapshot) -> Bool {
+    guard let session = snapshot.sessionPercentUsed else { return false }
+    return session >= 100
+}
+
+func isWeeklyQuotaExhausted(snapshot: UsageSnapshot) -> Bool {
+    guard let weekly = snapshot.weeklyPercentUsed else { return false }
+    return weekly >= 100
+}
+
+func effectiveResetWindow(for snapshot: UsageSnapshot) -> ResetWindowKind? {
+    if isWeeklyQuotaExhausted(snapshot: snapshot), snapshot.weeklyResetAt != nil {
+        return .weekly
+    }
+    if snapshot.nextResetAt != nil {
+        return .session
+    }
+    if snapshot.weeklyResetAt != nil {
+        return .weekly
+    }
+    return nil
+}
+
+func effectiveResetAt(snapshot: UsageSnapshot) -> Date? {
+    switch effectiveResetWindow(for: snapshot) {
+    case .session:
+        return snapshot.nextResetAt
+    case .weekly:
+        return snapshot.weeklyResetAt
+    case nil:
+        return nil
+    }
+}
+
 func hasFutureReset(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
-    guard let nextResetAt = snapshot.nextResetAt else { return false }
-    return nextResetAt.timeIntervalSince(now) > 0
+    guard let resetAt = effectiveResetAt(snapshot: snapshot) else { return false }
+    return resetAt.timeIntervalSince(now) > 0
 }
 
 func hasTrackedReset(snapshot: UsageSnapshot) -> Bool {
-    snapshot.nextResetAt != nil
+    effectiveResetAt(snapshot: snapshot) != nil
 }
 
 func isAwaitingReset(snapshot: UsageSnapshot) -> Bool {
-    if let session = snapshot.sessionPercentUsed,
-       remainingPercent(from: session) <= 0 {
+    if isWeeklyQuotaExhausted(snapshot: snapshot) || isSessionQuotaExhausted(snapshot: snapshot) {
         return true
     }
 
     switch snapshot.usageStatus {
-    case .coolingDown, .exhausted, .stale:
+    case .coolingDown:
         return true
+    case .exhausted, .stale:
+        return effectiveResetAt(snapshot: snapshot) != nil
     case .available, .unknown:
         return false
     }
 }
 
 func isResetReady(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
-    guard let nextResetAt = snapshot.nextResetAt else { return false }
-    return nextResetAt.timeIntervalSince(now) <= 0
+    guard let resetAt = effectiveResetAt(snapshot: snapshot) else { return false }
+    return resetAt.timeIntervalSince(now) <= 0
 }
 
 func shouldShowResetCountdown(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
@@ -66,8 +106,8 @@ func shouldScheduleResetReadyNotification(snapshot: UsageSnapshot, now: Date = .
 
 func shortUsageLabel(snapshot: UsageSnapshot, language: ResolvedAppLanguage = .english) -> String {
     if shouldShowResetCountdown(snapshot: snapshot),
-       let nextResetAt = snapshot.nextResetAt {
-        return countdownString(until: nextResetAt, language: language)
+       let resetAt = effectiveResetAt(snapshot: snapshot) {
+        return countdownString(until: resetAt, language: language)
     }
     if snapshot.usageStatus == .stale {
         return UsageStatus.stale.displayLabel(language: language)
@@ -113,6 +153,10 @@ func compactMenuBarLabel(from label: String) -> String {
 }
 
 func compactMenuBarLabel(snapshot: UsageSnapshot, language: ResolvedAppLanguage = .english) -> String {
+    if shouldShowResetCountdown(snapshot: snapshot) || isWeeklyQuotaExhausted(snapshot: snapshot) {
+        return compactMenuBarLabel(from: shortUsageLabel(snapshot: snapshot, language: language))
+    }
+
     if let session = snapshot.sessionPercentUsed {
         return "\(Int(remainingPercent(from: session)))%"
     }

@@ -90,6 +90,38 @@ struct AppPresentationRuntimeTests {
     }
 
     @Test
+    func menuBarPresentationUsesWeeklyCountdownWhenWeekIsExhausted() {
+        let runtime = AppPresentationRuntime()
+        let account = Account(id: UUID(), provider: .codex, email: "weekly@example.com", label: nil)
+        let now = Date(timeIntervalSince1970: 1_000)
+        let sessionResetAt = now.addingTimeInterval(600)
+        let weeklyResetAt = now.addingTimeInterval(2 * 24 * 60 * 60)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 40,
+            weeklyPercentUsed: 100,
+            nextResetAt: sessionResetAt,
+            weeklyResetAt: weeklyResetAt,
+            subscriptionExpiresAt: nil,
+            usageStatus: .exhausted,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        let result = runtime.makeMenuBarPresentation(
+            accounts: [account],
+            snapshots: [snapshot],
+            language: .english,
+            now: now
+        )
+
+        #expect(result.compactLabel == countdownString(until: weeklyResetAt, now: now, language: .english))
+        #expect(result.menuBarState == .allCoolingDown(nextResetAt: weeklyResetAt))
+    }
+
+    @Test
     func fullProjectionIncludesMenuBarStateAndSortedAccounts() {
         let runtime = AppPresentationRuntime()
         let now = Date(timeIntervalSince1970: 2_000)

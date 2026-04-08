@@ -25,3 +25,16 @@ default.profraw
 
 # Local Netlify folder
 .netlify
+
+# SwiftPM / local build artifacts
+.build/
+
+# Browser automation artifacts
+.playwright-cli/
+output/playwright/
+
+# Local brainstorming scratch output
+.superpowers/brainstorm/
+
+# Local Claude worktrees
+.claude/worktrees/

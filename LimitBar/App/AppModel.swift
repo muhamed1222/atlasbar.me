@@ -161,7 +161,7 @@ final class AppModel: ObservableObject {
         if shouldStartPolling {
             startPolling()
         }
-        if claudeSessionRuntime.isAvailable {
+        if claudeSessionRuntime.isAvailable && !shouldStartPolling {
             Task { await refreshClaudeWebSessionStatus() }
         }
         Task { await refreshAppUpdateAvailability() }

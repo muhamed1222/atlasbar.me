@@ -6,6 +6,15 @@ import SQLite3
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 struct ClaudeDesktopCookieReader: Sendable {
+    private static let cacheTTL: TimeInterval = 30
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var cachedCookieHeader: CachedCookieHeader?
+
+    private struct CachedCookieHeader {
+        let value: String?
+        let expiresAt: Date
+    }
+
     private static let safeStorageService = "Claude Safe Storage"
     private static let cookieNames = [
         "sessionKey",
@@ -17,24 +26,26 @@ struct ClaudeDesktopCookieReader: Sendable {
     ]
 
     func cookieHeaderValue() -> String? {
+        if let cached = Self.cachedCookieHeaderValue() {
+            return cached
+        }
+
         guard let passphrase = safeStoragePassphrase(),
               let cookies = readCookies(passphrase: passphrase),
               !cookies.isEmpty else {
+            Self.storeCachedCookieHeader(nil)
             return nil
         }
 
         let ordered = Self.cookieNames.compactMap { name in
             cookies[name].map { "\(name)=\($0)" }
         }
-        return ordered.isEmpty ? nil : ordered.joined(separator: "; ")
+        let header = ordered.isEmpty ? nil : ordered.joined(separator: "; ")
+        Self.storeCachedCookieHeader(header)
+        return header
     }
 
     private func safeStoragePassphrase() -> Data? {
-        if let password = KeychainSecurityCLIReader.password(service: Self.safeStorageService),
-           let data = password.data(using: .utf8) {
-            return data
-        }
-
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: Self.safeStorageService,
@@ -48,6 +59,26 @@ struct ClaudeDesktopCookieReader: Sendable {
             return nil
         }
         return data
+    }
+
+    private static func cachedCookieHeaderValue(now: Date = .now) -> String?? {
+        cacheLock.withLock {
+            guard let cached = cachedCookieHeader,
+                  cached.expiresAt > now else {
+                cachedCookieHeader = nil
+                return nil
+            }
+            return cached.value
+        }
+    }
+
+    private static func storeCachedCookieHeader(_ value: String?, now: Date = .now) {
+        cacheLock.withLock {
+            cachedCookieHeader = CachedCookieHeader(
+                value: value,
+                expiresAt: now.addingTimeInterval(cacheTTL)
+            )
+        }
     }
 
     private func readCookies(passphrase: Data) -> [String: String]? {

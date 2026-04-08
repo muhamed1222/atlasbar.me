@@ -124,6 +124,8 @@ The realistic near-term release path is:
 
 This gives a viable path to a signed downloadable app without forcing the architecture into App Store sandbox constraints prematurely.
 
+The operational release flow is documented in [macOS release flow](release-macos.md).
+
 ## Not Recommended Right Now
 
 The following path is not recommended as the primary release target:

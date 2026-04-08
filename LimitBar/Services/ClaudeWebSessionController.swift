@@ -56,18 +56,11 @@ final class ClaudeWebSessionController: NSObject, ObservableObject, @unchecked S
 
     func clearSession() async throws {
         let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
-        try await withCheckedThrowingContinuation { continuation in
-            websiteDataStore.fetchDataRecords(ofTypes: dataTypes) { records in
-                let claudeRecords = records.filter { record in
-                    record.displayName.localizedCaseInsensitiveContains("claude.ai")
-                }
-                self.websiteDataStore.removeData(ofTypes: dataTypes, for: claudeRecords) {
-                    self.usageResultsByOrganization.removeAll()
-                    self.internalWebView.loadHTMLString("", baseURL: nil)
-                    continuation.resume(returning: ())
-                }
-            }
-        }
+        let records = await websiteDataStore.dataRecords(ofTypes: dataTypes)
+        let claudeRecords = records.filter { $0.displayName.localizedCaseInsensitiveContains("claude.ai") }
+        await websiteDataStore.removeData(ofTypes: dataTypes, for: claudeRecords)
+        usageResultsByOrganization.removeAll()
+        internalWebView.loadHTMLString("", baseURL: nil)
     }
 
     func fetchUsageResponse(organizationUUID: String?) async -> ClaudeWebFetchResult? {

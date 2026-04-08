@@ -147,7 +147,7 @@ struct RefreshEngine: Sendable {
         }
 
         guard shouldScheduleResetReadyNotification(snapshot: snapshot, now: now),
-              let nextResetAt = snapshot.nextResetAt else {
+              let resetAt = effectiveResetAt(snapshot: snapshot) else {
             notificationManager.cancelCooldownReadyNotification(
                 accountId: account.id,
                 accountName: account.displayName
@@ -158,7 +158,7 @@ struct RefreshEngine: Sendable {
         notificationManager.scheduleCooldownReadyNotification(
             accountId: account.id,
             accountName: account.displayName,
-            at: nextResetAt
+            at: resetAt
         )
     }
 }

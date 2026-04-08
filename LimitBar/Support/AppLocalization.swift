@@ -182,6 +182,7 @@ struct AppStrings {
     var expired: String { tr(en: "Expired", ru: "Истекла") }
     var expiresToday: String { tr(en: "Expires today", ru: "Истекает сегодня") }
     var sessionReset: String { tr(en: "Session reset", ru: "Сброс сессии") }
+    var weeklyResetTitle: String { tr(en: "Weekly reset", ru: "Сброс недели") }
     var updatedPrefix: String { tr(en: "Updated", ru: "Обновлено") }
     var syncedPrefix: String { tr(en: "Synced", ru: "Синхронизировано") }
     var staleSyncedSeparator: String { tr(en: "Stale ·", ru: "Устарело ·") }
@@ -396,6 +397,20 @@ struct AppStrings {
         tr(
             en: "Session reset at \(time) (ready)",
             ru: "Сброс сессии в \(time) (готово)"
+        )
+    }
+
+    func weeklyResetSummary(time: String, countdown: String) -> String {
+        tr(
+            en: "Weekly reset at \(time) (in \(countdown))",
+            ru: "Сброс недели в \(time) (через \(countdown))"
+        )
+    }
+
+    func weeklyResetReadySummary(time: String) -> String {
+        tr(
+            en: "Weekly reset at \(time) (ready)",
+            ru: "Сброс недели в \(time) (готово)"
         )
     }
 

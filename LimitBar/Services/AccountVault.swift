@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Security
 import OSLog
 
@@ -173,7 +174,7 @@ struct AccountVault: AccountVaulting {
         ]
 
         if !allowsUserInteraction {
-            query[kSecUseAuthenticationUI] = kSecUseAuthenticationUIFail
+            query[kSecUseAuthenticationContext] = authenticationContext(interactionAllowed: false)
         }
 
         var item: CFTypeRef?
@@ -192,7 +193,7 @@ struct AccountVault: AccountVaulting {
         ]
 
         if !allowsUserInteraction {
-            query[kSecUseAuthenticationUI] = kSecUseAuthenticationUIFail
+            query[kSecUseAuthenticationContext] = authenticationContext(interactionAllowed: false)
         }
 
         var item: CFTypeRef?
@@ -227,5 +228,11 @@ struct AccountVault: AccountVaulting {
             kSecAttrAccount: account
         ]
         SecItemDelete(query as CFDictionary)
+    }
+
+    private func authenticationContext(interactionAllowed: Bool) -> LAContext {
+        let context = LAContext()
+        context.interactionNotAllowed = !interactionAllowed
+        return context
     }
 }

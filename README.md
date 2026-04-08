@@ -78,8 +78,70 @@ xcodegen generate
 ## Run Tests
 
 ```bash
-xcodebuild test -project LimitBar.xcodeproj -scheme LimitBar -destination 'platform=macOS'
+xcodebuild test -project LimitBar.xcodeproj -scheme LimitBar -destination 'platform=macOS,arch=arm64'
 ```
+
+## Build Release
+
+```bash
+./scripts/build-release-macos.sh
+```
+
+## Local Release For This Mac
+
+```bash
+./scripts/local-release-macos.sh
+```
+
+This is the main free local-only flow. It builds the app in `Release`, installs it into `/Applications` when writable or `~/Applications` otherwise, and launches it.
+
+## Install Release Locally
+
+```bash
+./scripts/install-release-macos.sh
+```
+
+## Package Local Download Zip
+
+```bash
+./scripts/package-local-zip-macos.sh
+```
+
+This builds the app in `Release` and creates a stable archive at `build/export/local-download/LimitBar-macOS.zip`. Upload that file to GitHub Releases with the same asset name so the promo site download button keeps working.
+
+## Uninstall Local Release
+
+```bash
+./scripts/uninstall-local-macos.sh
+```
+
+## Archive For Distribution
+
+```bash
+./scripts/archive-release-macos.sh
+```
+
+## Check Signing And Notarization Readiness
+
+```bash
+./scripts/check-release-signing-macos.sh
+```
+
+## Export Developer ID Build
+
+```bash
+./scripts/export-developer-id-macos.sh
+```
+
+## Notarize Build
+
+```bash
+NOTARYTOOL_PROFILE=limitbar-notary ./scripts/notarize-macos.sh
+```
+
+## Signed Release Docs
+
+- Direct distribution and notarization flow: `docs/release-macos.md`
 
 ## Current Status
 
@@ -90,4 +152,4 @@ This is an early working version focused on:
 - compact menu bar UI
 - local snapshot persistence and account switching
 
-It is not yet packaged as a signed distributable `.app`.
+It can be built and installed locally as a Release `.app` with the free local-only flow, but it is not yet packaged as a notarized distributable build.

@@ -239,6 +239,38 @@ struct AccountPresentationTests {
     }
 
     @Test
+    func accountRowPresentationUsesWeeklyResetAccentForWeeklyExhaustion() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Codex", email: "weekly@example.com", label: nil)
+        let weeklyResetAt = now.addingTimeInterval(26 * 60 * 60)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 35,
+            weeklyPercentUsed: 100,
+            nextResetAt: now.addingTimeInterval(2 * 60 * 60),
+            weeklyResetAt: weeklyResetAt,
+            subscriptionExpiresAt: nil,
+            usageStatus: .exhausted,
+            sourceConfidence: 1,
+            lastSyncedAt: now.addingTimeInterval(-600),
+            rawExtractedStrings: []
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now
+        )
+
+        #expect(presentation.usageSummary?.text == "26h 0m")
+        #expect(presentation.resetAccent?.title == "Weekly reset")
+        #expect(presentation.resetAccent?.countdownText == "Resets in 26h")
+        #expect(presentation.resetAccent?.summaryText == "Weekly reset at 18:46 (in 26h)")
+    }
+
+    @Test
     func accountsListRowPresentationCarriesPriorityAndNotePreview() {
         let now = Date(timeIntervalSince1970: 1_000_000)
         let account = Account(id: UUID(), provider: "Codex", email: "list@example.com", label: nil)

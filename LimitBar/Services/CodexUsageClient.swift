@@ -47,10 +47,12 @@ struct CodexUsageClient {
         let weeklyResetAt = weeklyResetTimestamp.map { Date(timeIntervalSince1970: $0) }
 
         let status: UsageStatus
-        if let pct = sessionPct {
-            if pct >= 100 { status = .exhausted }
-            else if pct >= 80 { status = .coolingDown }
-            else { status = .available }
+        if let weeklyPct, weeklyPct >= 100 {
+            status = .exhausted
+        } else if let sessionPct, sessionPct >= 100 {
+            status = .coolingDown
+        } else if sessionPct != nil || weeklyPct != nil {
+            status = .available
         } else {
             status = .unknown
         }

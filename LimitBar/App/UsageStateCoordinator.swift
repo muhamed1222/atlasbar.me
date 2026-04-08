@@ -298,7 +298,7 @@ struct UsageStateCoordinator: Sendable {
         }
 
         guard shouldScheduleResetReadyNotification(snapshot: snapshot),
-              let nextResetAt = snapshot.nextResetAt else {
+              let resetAt = effectiveResetAt(snapshot: snapshot) else {
             notificationManager.cancelCooldownReadyNotification(accountId: account.id, accountName: account.displayName)
             return
         }
@@ -306,7 +306,7 @@ struct UsageStateCoordinator: Sendable {
         notificationManager.scheduleCooldownReadyNotification(
             accountId: account.id,
             accountName: account.displayName,
-            at: nextResetAt
+            at: resetAt
         )
     }
 

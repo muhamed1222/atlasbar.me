@@ -50,7 +50,7 @@ struct AppPresentationRuntime: Sendable {
         guard !liveSnapshots.isEmpty else {
             let nextReset = snapshots
                 .filter { shouldScheduleResetReadyNotification(snapshot: $0, now: now) }
-                .compactMap(\.nextResetAt)
+                .compactMap { effectiveResetAt(snapshot: $0) }
                 .min()
 
             if let nextReset {
@@ -70,7 +70,7 @@ struct AppPresentationRuntime: Sendable {
         let waitingForReset = liveSnapshots.filter { shouldScheduleResetReadyNotification(snapshot: $0, now: now) }
 
         if available.isEmpty {
-            let nextReset = waitingForReset.compactMap(\.nextResetAt).min()
+            let nextReset = waitingForReset.compactMap { effectiveResetAt(snapshot: $0) }.min()
             if let nextReset {
                 return MenuBarPresentationProjection(
                     compactLabel: countdownString(until: nextReset, now: now, language: language),

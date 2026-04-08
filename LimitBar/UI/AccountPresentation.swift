@@ -130,10 +130,10 @@ func makeAccountRowPresentation(
 
         if resetAccent == nil,
            shouldShowResetCountdown(snapshot: snapshot, now: now),
-           let nextResetAt = snapshot.nextResetAt {
+           let resetAt = effectiveResetAt(snapshot: snapshot) {
             chips.append(
                 PresentationChip(
-                    text: countdownString(until: nextResetAt, now: now, language: language),
+                    text: countdownString(until: resetAt, now: now, language: language),
                     tone: .orange,
                     style: .outlined,
                     monospaced: true
@@ -316,39 +316,46 @@ private func usageBarsPresentation(snapshot: UsageSnapshot?, provider _: Provide
 
 private func usageSummaryText(for snapshot: UsageSnapshot, now: Date, language: ResolvedAppLanguage) -> String {
     if shouldShowResetCountdown(snapshot: snapshot, now: now),
-       let nextResetAt = snapshot.nextResetAt {
-        return countdownString(until: nextResetAt, now: now, language: language)
+       let resetAt = effectiveResetAt(snapshot: snapshot) {
+        return countdownString(until: resetAt, now: now, language: language)
     }
     return shortUsageLabel(snapshot: snapshot, language: language)
 }
 
 private func resetAccent(for snapshot: UsageSnapshot?, now: Date, language: ResolvedAppLanguage) -> ResetAccentPresentation? {
-    guard let nextResetAt = snapshot?.nextResetAt else {
+    guard let snapshot,
+          let resetAt = effectiveResetAt(snapshot: snapshot) else {
         return nil
     }
 
     let strings = AppStrings(language: language)
-    let timeText = localizedTimeOfDay(nextResetAt, language: language)
+    let timeText = localizedTimeOfDay(resetAt, language: language)
+    let isWeeklyReset = effectiveResetWindow(for: snapshot) == .weekly
+    let title = isWeeklyReset ? strings.weeklyResetTitle : strings.sessionReset
 
-    if nextResetAt.timeIntervalSince(now) <= 0 {
+    if resetAt.timeIntervalSince(now) <= 0 {
         return ResetAccentPresentation(
-            title: strings.sessionReset,
+            title: title,
             countdownText: strings.ready,
             countdownValue: strings.ready,
             timeText: timeText,
-            summaryText: strings.sessionResetReadySummary(time: timeText),
+            summaryText: isWeeklyReset
+                ? strings.weeklyResetReadySummary(time: timeText)
+                : strings.sessionResetReadySummary(time: timeText),
             countdownTone: .green
         )
     }
 
-    let countdown = resetCountdownString(until: nextResetAt, now: now, language: language)
+    let countdown = resetCountdownString(until: resetAt, now: now, language: language)
     let countdownText = strings.resetsIn(countdown)
     return ResetAccentPresentation(
-        title: strings.sessionReset,
+        title: title,
         countdownText: countdownText,
         countdownValue: countdown,
         timeText: timeText,
-        summaryText: strings.sessionResetSummary(time: timeText, countdown: countdown),
+        summaryText: isWeeklyReset
+            ? strings.weeklyResetSummary(time: timeText, countdown: countdown)
+            : strings.sessionResetSummary(time: timeText, countdown: countdown),
         countdownTone: .orange
     )
 }

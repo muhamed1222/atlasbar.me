@@ -18,6 +18,7 @@ private final class AccountSwitchRuntimeSessionSwitcherStub: @unchecked Sendable
 
 @MainActor
 struct AccountSwitchRuntimeTests {
+    @MainActor
     @Test
     func returnsNilForUnsupportedAccountsOrConcurrentSwitch() async {
         let sessionSwitcher = AccountSwitchRuntimeSessionSwitcherStub()
@@ -37,6 +38,7 @@ struct AccountSwitchRuntimeTests {
         #expect(sessionSwitcher.switchedEmails.isEmpty)
     }
 
+    @MainActor
     @Test
     func returnsConfirmedEmailAndRefreshOnSuccess() async {
         let sessionSwitcher = AccountSwitchRuntimeSessionSwitcherStub()
@@ -55,6 +57,7 @@ struct AccountSwitchRuntimeTests {
         #expect(result?.switchingAccountId == nil)
     }
 
+    @MainActor
     @Test
     func returnsErrorWithoutRefreshOnFailure() async {
         let sessionSwitcher = AccountSwitchRuntimeSessionSwitcherStub()

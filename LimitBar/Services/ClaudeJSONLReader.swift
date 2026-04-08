@@ -22,7 +22,7 @@ struct ClaudeJSONLReader: ClaudeJSONLReading {
         let entries: [(tokens: Int, date: Date)]
     }
 
-    nonisolated(unsafe) private static let cacheLock = NSLock()
+    private static let cacheLock = NSLock()
     nonisolated(unsafe) private static var fileCache: [URL: CachedFileEntries] = [:]
 
     nonisolated(unsafe) private static let fractionalDateFormatter: ISO8601DateFormatter = {
