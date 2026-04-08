@@ -20,15 +20,12 @@ func expiryDateLabel(_ date: Date, now: Date = .now, language: ResolvedAppLangua
 func countdownString(until date: Date, now: Date = .now, language: ResolvedAppLanguage = .english) -> String {
     let remaining = max(0, Int(date.timeIntervalSince(now)))
     if remaining == 0 { return AppStrings(language: language).ready }
-    let hours = remaining / 3600
-    let minutes = (remaining % 3600) / 60
-    if hours > 0 {
-        return "\(hours)h \(minutes)m"
-    }
-    if minutes == 0 {
-        return "<1m"
-    }
-    return "\(minutes)m"
+    return localizedShortDurationString(
+        remainingSeconds: remaining,
+        language: language,
+        dropsZeroMinutesWhenHoursPresent: false,
+        zeroText: AppStrings(language: language).ready
+    )
 }
 
 func isSessionQuotaExhausted(snapshot: UsageSnapshot) -> Bool {
@@ -218,6 +215,37 @@ func compactMenuBarItems(
 
         return CompactMenuBarItem(provider: provider, label: label)
     }
+}
+
+func localizedShortDurationString(
+    remainingSeconds: Int,
+    language: ResolvedAppLanguage = .english,
+    dropsZeroMinutesWhenHoursPresent: Bool,
+    zeroText: String? = nil
+) -> String {
+    let strings = AppStrings(language: language)
+    let remaining = max(0, remainingSeconds)
+
+    if remaining == 0 {
+        return zeroText ?? strings.ready
+    }
+
+    let hours = remaining / 3600
+    let minutes = (remaining % 3600) / 60
+
+    if hours > 0, dropsZeroMinutesWhenHoursPresent, minutes == 0 {
+        return "\(hours)\(strings.shortHourUnit)"
+    }
+
+    if hours > 0 {
+        return "\(hours)\(strings.shortHourUnit) \(minutes)\(strings.shortMinuteUnit)"
+    }
+
+    if minutes == 0 {
+        return strings.lessThanOneMinute
+    }
+
+    return "\(minutes)\(strings.shortMinuteUnit)"
 }
 
 func staleUsageLabel(hasSnapshots: Bool, language: ResolvedAppLanguage = .english) -> String {

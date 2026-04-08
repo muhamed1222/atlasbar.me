@@ -38,6 +38,13 @@ struct ResetAccentPresentation: Equatable {
     var countdownTone: PresentationTone
 }
 
+enum AccountQuotaDisplayMode: Equatable {
+    case subscriptionExpired
+    case normal
+    case sessionCooldown
+    case weeklyLock
+}
+
 struct AccountRowPresentation: Equatable {
     var title: String
     var planLabel: String?
@@ -77,6 +84,45 @@ struct AccountDetailPresentation: Equatable {
     var identityRows: [IdentityRow]
     var noteFooter: String
     var noteCharacterCount: String
+}
+
+func accountQuotaDisplayMode(
+    snapshot: UsageSnapshot?,
+    now: Date = .now
+) -> AccountQuotaDisplayMode {
+    guard let snapshot else {
+        return .normal
+    }
+
+    if SubscriptionDerivedState.from(expiryDate: snapshot.subscriptionExpiresAt, now: now) == .expired {
+        return .subscriptionExpired
+    }
+
+    if isWeeklyQuotaExhausted(snapshot: snapshot) {
+        return .weeklyLock
+    }
+
+    if isSessionQuotaExhausted(snapshot: snapshot),
+       effectiveResetWindow(for: snapshot) == .session {
+        return .sessionCooldown
+    }
+
+    return .normal
+}
+
+func visibleUsageBars(
+    snapshot: UsageSnapshot?,
+    usageBars: [UsageBarPresentation],
+    now: Date = .now
+) -> [UsageBarPresentation] {
+    switch accountQuotaDisplayMode(snapshot: snapshot, now: now) {
+    case .subscriptionExpired:
+        return []
+    case .weeklyLock:
+        return usageBars.filter { $0.label == "W" }
+    case .normal, .sessionCooldown:
+        return usageBars
+    }
 }
 
 enum DataQualityState: Equatable {
@@ -384,19 +430,12 @@ private func subscriptionChip(for snapshot: UsageSnapshot, now: Date, language: 
 
 private func resetCountdownString(until date: Date, now: Date, language: ResolvedAppLanguage) -> String {
     let remaining = max(0, Int(date.timeIntervalSince(now)))
-    let hours = remaining / 3600
-    let minutes = (remaining % 3600) / 60
-
-    if hours > 0, minutes == 0 {
-        return "\(hours)h"
-    }
-    if hours > 0 {
-        return "\(hours)h \(minutes)m"
-    }
-    if minutes > 0 {
-        return "\(minutes)m"
-    }
-    return AppStrings(language: language).ready.lowercased()
+    return localizedShortDurationString(
+        remainingSeconds: remaining,
+        language: language,
+        dropsZeroMinutesWhenHoursPresent: true,
+        zeroText: AppStrings(language: language).ready.lowercased()
+    )
 }
 
 private func subscriptionTone(for snapshot: UsageSnapshot?, now: Date) -> PresentationTone {

@@ -107,22 +107,31 @@ struct AppPresentationRuntime: Sendable {
     func sortAccounts(
         accounts: [Account],
         accountMetadata: [AccountMetadata],
-        snapshots: [UsageSnapshot]
+        snapshots: [UsageSnapshot],
+        now: Date = .now
     ) -> [Account] {
         let metadataByAccountId = Dictionary(uniqueKeysWithValues: accountMetadata.map { ($0.accountId, $0) })
-        let lastSyncedByAccountId = Dictionary(
-            uniqueKeysWithValues: snapshots.map { ($0.accountId, $0.lastSyncedAt ?? .distantPast) }
+        let snapshotsByAccountId = Dictionary(
+            uniqueKeysWithValues: snapshots.map { ($0.accountId, $0) }
         )
 
         return accounts.sorted { lhs, rhs in
+            let lhsSnapshot = snapshotsByAccountId[lhs.id]
+            let rhsSnapshot = snapshotsByAccountId[rhs.id]
+            let lhsExpired = SubscriptionDerivedState.from(expiryDate: lhsSnapshot?.subscriptionExpiresAt, now: now) == .expired
+            let rhsExpired = SubscriptionDerivedState.from(expiryDate: rhsSnapshot?.subscriptionExpiresAt, now: now) == .expired
+            if lhsExpired != rhsExpired {
+                return !lhsExpired
+            }
+
             let lhsMetadata = metadataByAccountId[lhs.id] ?? AccountMetadata(accountId: lhs.id)
             let rhsMetadata = metadataByAccountId[rhs.id] ?? AccountMetadata(accountId: rhs.id)
             if lhsMetadata.priority.sortWeight != rhsMetadata.priority.sortWeight {
                 return lhsMetadata.priority.sortWeight < rhsMetadata.priority.sortWeight
             }
 
-            let lhsLastSynced = lastSyncedByAccountId[lhs.id] ?? .distantPast
-            let rhsLastSynced = lastSyncedByAccountId[rhs.id] ?? .distantPast
+            let lhsLastSynced = lhsSnapshot?.lastSyncedAt ?? .distantPast
+            let rhsLastSynced = rhsSnapshot?.lastSyncedAt ?? .distantPast
             if lhsLastSynced != rhsLastSynced {
                 return lhsLastSynced > rhsLastSynced
             }

@@ -60,6 +60,64 @@ struct AppPresentationRuntimeTests {
     }
 
     @Test
+    func sortsExpiredSubscriptionsToBottom() {
+        let runtime = AppPresentationRuntime()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let expiredPrimary = Account(id: UUID(), provider: .codex, email: "expired@example.com", label: nil)
+        let activeBackup = Account(id: UUID(), provider: .codex, email: "backup@example.com", label: nil)
+        let activePlain = Account(id: UUID(), provider: .codex, email: "plain@example.com", label: nil)
+
+        let sorted = runtime.sortAccounts(
+            accounts: [expiredPrimary, activePlain, activeBackup],
+            accountMetadata: [
+                AccountMetadata(accountId: expiredPrimary.id, priority: .primary),
+                AccountMetadata(accountId: activeBackup.id, priority: .backup)
+            ],
+            snapshots: [
+                UsageSnapshot(
+                    id: UUID(),
+                    accountId: expiredPrimary.id,
+                    sessionPercentUsed: nil,
+                    weeklyPercentUsed: nil,
+                    nextResetAt: nil,
+                    subscriptionExpiresAt: now.addingTimeInterval(-60),
+                    usageStatus: .unknown,
+                    sourceConfidence: 0,
+                    lastSyncedAt: now.addingTimeInterval(30),
+                    rawExtractedStrings: []
+                ),
+                UsageSnapshot(
+                    id: UUID(),
+                    accountId: activeBackup.id,
+                    sessionPercentUsed: nil,
+                    weeklyPercentUsed: nil,
+                    nextResetAt: nil,
+                    subscriptionExpiresAt: now.addingTimeInterval(10 * 24 * 60 * 60),
+                    usageStatus: .unknown,
+                    sourceConfidence: 0,
+                    lastSyncedAt: now.addingTimeInterval(20),
+                    rawExtractedStrings: []
+                ),
+                UsageSnapshot(
+                    id: UUID(),
+                    accountId: activePlain.id,
+                    sessionPercentUsed: nil,
+                    weeklyPercentUsed: nil,
+                    nextResetAt: nil,
+                    subscriptionExpiresAt: now.addingTimeInterval(10 * 24 * 60 * 60),
+                    usageStatus: .unknown,
+                    sourceConfidence: 0,
+                    lastSyncedAt: now.addingTimeInterval(10),
+                    rawExtractedStrings: []
+                )
+            ],
+            now: now
+        )
+
+        #expect(sorted.map(\.id) == [activeBackup.id, activePlain.id, expiredPrimary.id])
+    }
+
+    @Test
     func menuBarPresentationUsesCountdownWhenOnlyCooldownSnapshotsExist() {
         let runtime = AppPresentationRuntime()
         let account = Account(id: UUID(), provider: .codex, email: "cooldown@example.com", label: nil)

@@ -10,6 +10,7 @@ struct AccountRowView: View {
     let onSwitch: () -> Void
     let language: ResolvedAppLanguage
     @State private var isRowHovered = false
+    @State private var isActivePulseVisible = false
     private let detailRowHeight: CGFloat = 24
     private let detailRowSpacing: CGFloat = 3
     private let metricsBlockPadding: CGFloat = 3
@@ -32,12 +33,20 @@ struct AccountRowView: View {
         AppStrings(language: language)
     }
 
+    private var quotaDisplayMode: AccountQuotaDisplayMode {
+        accountQuotaDisplayMode(snapshot: snapshot)
+    }
+
+    private var displayedUsageBars: [UsageBarPresentation] {
+        visibleUsageBars(snapshot: snapshot, usageBars: presentation.usageBars)
+    }
+
     private var sessionUsage: UsageBarPresentation? {
-        presentation.usageBars.first(where: { $0.label == "S" })
+        displayedUsageBars.first(where: { $0.label == "S" })
     }
 
     private var weeklyUsage: UsageBarPresentation? {
-        presentation.usageBars.first(where: { $0.label == "W" })
+        displayedUsageBars.first(where: { $0.label == "W" })
     }
 
     private var hasMetricsContent: Bool {
@@ -46,6 +55,20 @@ struct AccountRowView: View {
             || presentation.resetAccent != nil
             || presentation.subscriptionChip != nil
             || presentation.syncText != nil
+    }
+
+    private var rowFillColor: Color {
+        if isActive {
+            return Color.green.opacity(0.06)
+        }
+        return Color.primary.opacity(isRowHovered ? 0.06 : 0.04)
+    }
+
+    private var rowStrokeColor: Color {
+        if isActive {
+            return Color.green.opacity(0.18)
+        }
+        return Color.primary.opacity(isRowHovered ? 0.09 : 0.04)
     }
 
     var body: some View {
@@ -61,6 +84,7 @@ struct AccountRowView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .padding(.top, 1)
             }
         }
         .padding(.horizontal, 7)
@@ -68,10 +92,20 @@ struct AccountRowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(0.045))
+                .fill(rowFillColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(rowStrokeColor, lineWidth: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onHover { isRowHovered = $0 }
+        .onAppear {
+            isActivePulseVisible = isActive
+        }
+        .onChange(of: isActive) { _, newValue in
+            isActivePulseVisible = newValue
+        }
     }
 
     private var headerLine: some View {
@@ -79,7 +113,7 @@ struct AccountRowView: View {
             providerMark
 
             Text(presentation.title)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 12.5, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
@@ -89,21 +123,25 @@ struct AccountRowView: View {
 
             Spacer(minLength: 8)
 
-            if isActive {
-                activeIndicator
-            } else if canSwitch {
-                switchButton
-            }
+            HStack(spacing: 2) {
+                if isActive {
+                    activeIndicator
+                } else if canSwitch {
+                    switchButton
+                }
 
-            deleteButton
+                deleteButton
+            }
         }
     }
 
     private var metricsLine: some View {
         HStack(alignment: .top, spacing: 8) {
-            if sessionUsage != nil || weeklyUsage != nil {
+            if quotaDisplayMode != .subscriptionExpired,
+               sessionUsage != nil || weeklyUsage != nil {
                 gaugeCluster
-            } else if let tokenDials = claudeTokenDials {
+            } else if quotaDisplayMode != .subscriptionExpired,
+                      let tokenDials = claudeTokenDials {
                 claudeGaugeCluster(tokenDials)
             }
 
@@ -141,7 +179,7 @@ struct AccountRowView: View {
         .frame(height: metricsBlockHeight)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.028))
+                .fill(Color.primary.opacity(0.022))
         )
     }
 
@@ -201,15 +239,22 @@ struct AccountRowView: View {
         .frame(height: metricsBlockHeight)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.028))
+                .fill(Color.primary.opacity(0.022))
         )
     }
 
     private var timeDetailsBlock: some View {
         VStack(alignment: .leading, spacing: detailRowSpacing) {
-            if sessionUsage != nil || weeklyUsage != nil {
+            switch quotaDisplayMode {
+            case .subscriptionExpired:
+                subscriptionExpiredBlock
+            case .normal where sessionUsage != nil || weeklyUsage != nil:
                 quotaScheduleBlock
-            } else {
+            case .sessionCooldown:
+                sessionCooldownBlock
+            case .weeklyLock:
+                weeklyLockBlock
+            case .normal:
                 if let resetAccent = presentation.resetAccent {
                     detailRow(
                         title: strings.reset,
@@ -233,7 +278,8 @@ struct AccountRowView: View {
                 }
             }
 
-            if sessionUsage == nil, weeklyUsage == nil,
+            if quotaDisplayMode != .subscriptionExpired,
+               sessionUsage == nil, weeklyUsage == nil,
                let tokensToday = presentation.totalTokensToday {
                 detailRow(
                     title: strings.tokensToday,
@@ -262,8 +308,66 @@ struct AccountRowView: View {
         .padding(.vertical, metricsBlockPadding)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.028))
+                .fill(Color.primary.opacity(0.022))
         )
+    }
+
+    private var subscriptionExpiredBlock: some View {
+        Group {
+            detailRow(
+                title: strings.subscription,
+                value: subscriptionValueText ?? strings.expired,
+                tone: presentation.subscriptionChip?.tone.color ?? .secondary
+            )
+        }
+    }
+
+    private var sessionCooldownBlock: some View {
+        Group {
+            if let resetAccent = presentation.resetAccent {
+                detailRow(
+                    title: resetAccent.title,
+                    value: resetAccent.countdownValue,
+                    tone: resetAccent.countdownTone.color
+                )
+            }
+
+            detailRow(
+                title: strings.weeklyReset,
+                value: weeklyResetValueText,
+                tone: .secondary
+            )
+
+            detailRow(
+                title: strings.subscription,
+                value: subscriptionValueText ?? "--",
+                tone: presentation.subscriptionChip?.tone.color ?? .secondary
+            )
+        }
+    }
+
+    private var weeklyLockBlock: some View {
+        Group {
+            if let resetAccent = presentation.resetAccent {
+                detailRow(
+                    title: resetAccent.title,
+                    value: resetAccent.countdownValue,
+                    tone: resetAccent.countdownTone.color
+                )
+            }
+
+            detailRow(
+                title: strings.weeklyReset,
+                value: weeklyResetValueText,
+                tone: .secondary
+            )
+
+            detailRow(
+                title: strings.subscription,
+                value: subscriptionValueText ?? "--",
+                tone: presentation.subscriptionChip?.tone.color ?? .secondary
+            )
+        }
     }
 
     private var quotaScheduleBlock: some View {
@@ -350,20 +454,23 @@ struct AccountRowView: View {
     }
 
     private var activeIndicator: some View {
-        HStack(spacing: 3) {
+        ZStack {
             Circle()
                 .fill(Color.green)
-                .frame(width: 5, height: 5)
-            Text(strings.activeAccountLabel)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.green)
+                .frame(width: 7, height: 7)
+
+            Circle()
+                .stroke(Color.green.opacity(0.35), lineWidth: 1.5)
+                .frame(width: 13, height: 13)
+                .scaleEffect(isActivePulseVisible ? 1.16 : 0.86)
+                .opacity(isActivePulseVisible ? 0.15 : 0.42)
+                .animation(
+                    .easeInOut(duration: 1.15).repeatForever(autoreverses: true),
+                    value: isActivePulseVisible
+                )
         }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2.5)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.green.opacity(0.1))
-        )
+        .frame(width: 16, height: 16)
+        .help(strings.activeAccountLabel)
     }
 
     private var switchButton: some View {
@@ -469,7 +576,7 @@ private struct UsageDialView: View {
 
             VStack(spacing: 1) {
                 Text("\(remainingPercent)")
-                    .font(.system(size: 11.5, weight: .bold).monospacedDigit())
+                    .font(.system(size: 9.5, weight: .bold).monospacedDigit())
                     .foregroundStyle(.primary)
                 Text("%")
                     .font(.system(size: 7.5, weight: .semibold))

@@ -253,6 +253,18 @@ struct AppStrings {
         }
     }
 
+    var shortHourUnit: String {
+        tr(en: "h", ru: "ч")
+    }
+
+    var shortMinuteUnit: String {
+        tr(en: "m", ru: "м")
+    }
+
+    var lessThanOneMinute: String {
+        tr(en: "<1m", ru: "<1м")
+    }
+
     func updateAvailableVersion(_ version: String) -> String {
         switch language {
         case .english:

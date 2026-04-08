@@ -119,6 +119,14 @@ struct AccountPresentationTests {
     }
 
     @Test
+    func countdownStringUsesRussianShortUnits() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let target = now.addingTimeInterval((110 * 60 * 60) + (38 * 60))
+
+        #expect(countdownString(until: target, now: now, language: .russian) == "110ч 38м")
+    }
+
+    @Test
     func accountRowPresentationKeepsCachedCountdownForStaleSnapshot() {
         let now = Date(timeIntervalSince1970: 1_000_000)
         let account = Account(id: UUID(), provider: "Codex", email: "stale@example.com", label: nil)
@@ -176,6 +184,36 @@ struct AccountPresentationTests {
         #expect(presentation.usageSummary?.text == "S26 W79")
         #expect(presentation.resetAccent?.countdownText == "Resets in 5h")
         #expect(presentation.resetAccent?.timeText == "21:46")
+    }
+
+    @Test
+    func accountRowPresentationLocalizesResetAccentCountdownForRussian() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let account = Account(id: UUID(), provider: "Codex", email: "ru@example.com", label: nil)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: account.id,
+            sessionPercentUsed: 74,
+            weeklyPercentUsed: 21,
+            nextResetAt: now.addingTimeInterval((5 * 60 * 60) + (30 * 60)),
+            subscriptionExpiresAt: nil,
+            usageStatus: .available,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        let presentation = makeAccountRowPresentation(
+            account: account,
+            snapshot: snapshot,
+            metadata: AccountMetadata(accountId: account.id),
+            now: now,
+            language: .russian
+        )
+
+        #expect(presentation.usageSummary?.text == "S26 W79")
+        #expect(presentation.resetAccent?.countdownText == "Сброс через 5ч 30м")
+        #expect(presentation.resetAccent?.summaryText == "Сброс сессии в 22:16 (через 5ч 30м)")
     }
 
     @Test
@@ -268,6 +306,83 @@ struct AccountPresentationTests {
         #expect(presentation.resetAccent?.title == "Weekly reset")
         #expect(presentation.resetAccent?.countdownText == "Resets in 26h")
         #expect(presentation.resetAccent?.summaryText == "Weekly reset at 18:46 (in 26h)")
+    }
+
+    @Test
+    func accountQuotaDisplayModeUsesWeeklyLockWhenWeekIsExhausted() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: UUID(),
+            sessionPercentUsed: 35,
+            weeklyPercentUsed: 100,
+            nextResetAt: now.addingTimeInterval(2 * 60 * 60),
+            weeklyResetAt: now.addingTimeInterval(26 * 60 * 60),
+            subscriptionExpiresAt: nil,
+            usageStatus: .exhausted,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        #expect(accountQuotaDisplayMode(snapshot: snapshot) == .weeklyLock)
+        #expect(visibleUsageBars(snapshot: snapshot, usageBars: [
+            UsageBarPresentation(label: "S", remainingPercent: 65),
+            UsageBarPresentation(label: "W", remainingPercent: 0)
+        ]) == [
+            UsageBarPresentation(label: "W", remainingPercent: 0)
+        ])
+    }
+
+    @Test
+    func accountQuotaDisplayModeUsesSessionCooldownWhenOnlySessionIsExhausted() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: UUID(),
+            sessionPercentUsed: 100,
+            weeklyPercentUsed: 72,
+            nextResetAt: now.addingTimeInterval(2 * 60 * 60),
+            weeklyResetAt: now.addingTimeInterval(3 * 24 * 60 * 60),
+            subscriptionExpiresAt: nil,
+            usageStatus: .coolingDown,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        #expect(accountQuotaDisplayMode(snapshot: snapshot) == .sessionCooldown)
+        #expect(visibleUsageBars(snapshot: snapshot, usageBars: [
+            UsageBarPresentation(label: "S", remainingPercent: 0),
+            UsageBarPresentation(label: "W", remainingPercent: 28)
+        ], now: now) == [
+            UsageBarPresentation(label: "S", remainingPercent: 0),
+            UsageBarPresentation(label: "W", remainingPercent: 28)
+        ])
+    }
+
+    @Test
+    func accountQuotaDisplayModePrefersExpiredSubscriptionOverWeeklyReset() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let snapshot = UsageSnapshot(
+            id: UUID(),
+            accountId: UUID(),
+            sessionPercentUsed: 100,
+            weeklyPercentUsed: 100,
+            nextResetAt: now.addingTimeInterval(2 * 60 * 60),
+            weeklyResetAt: now.addingTimeInterval(26 * 60 * 60),
+            subscriptionExpiresAt: now.addingTimeInterval(-60),
+            usageStatus: .exhausted,
+            sourceConfidence: 1,
+            lastSyncedAt: now,
+            rawExtractedStrings: []
+        )
+
+        #expect(accountQuotaDisplayMode(snapshot: snapshot, now: now) == .subscriptionExpired)
+        #expect(visibleUsageBars(snapshot: snapshot, usageBars: [
+            UsageBarPresentation(label: "S", remainingPercent: 0),
+            UsageBarPresentation(label: "W", remainingPercent: 0)
+        ], now: now).isEmpty)
     }
 
     @Test
