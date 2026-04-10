@@ -214,7 +214,6 @@ struct ClaudeUsagePipelineTests {
               }
             }
             """,
-            url: "https://claude.ai/settings/usage",
             organizationUUID: "org-123"
         )
         controller.subscriptionResultByOrganization["org-123"] = ClaudeWebFetchResult(
@@ -227,7 +226,6 @@ struct ClaudeUsagePipelineTests {
               "currency": "USD"
             }
             """,
-            url: "https://claude.ai/settings/billing",
             organizationUUID: "org-123"
         )
 

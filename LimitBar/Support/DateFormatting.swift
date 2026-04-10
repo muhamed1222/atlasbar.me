@@ -67,10 +67,6 @@ func hasFutureReset(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
     return resetAt.timeIntervalSince(now) > 0
 }
 
-func hasTrackedReset(snapshot: UsageSnapshot) -> Bool {
-    effectiveResetAt(snapshot: snapshot) != nil
-}
-
 func isAwaitingReset(snapshot: UsageSnapshot) -> Bool {
     if isWeeklyQuotaExhausted(snapshot: snapshot) || isSessionQuotaExhausted(snapshot: snapshot) {
         return true
@@ -84,11 +80,6 @@ func isAwaitingReset(snapshot: UsageSnapshot) -> Bool {
     case .available, .unknown:
         return false
     }
-}
-
-func isResetReady(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
-    guard let resetAt = effectiveResetAt(snapshot: snapshot) else { return false }
-    return resetAt.timeIntervalSince(now) <= 0
 }
 
 func shouldShowResetCountdown(snapshot: UsageSnapshot, now: Date = .now) -> Bool {
@@ -250,17 +241,4 @@ func localizedShortDurationString(
 
 func staleUsageLabel(hasSnapshots: Bool, language: ResolvedAppLanguage = .english) -> String {
     hasSnapshots ? UsageStatus.stale.displayLabel(language: language) : AppStrings(language: language).offline
-}
-
-func freshnessLabel(for snapshot: UsageSnapshot, language: ResolvedAppLanguage = .english, now: Date = .now) -> String? {
-    let strings = AppStrings(language: language)
-    if snapshot.usageStatus == .stale {
-        if let lastSyncedAt = snapshot.lastSyncedAt {
-            return strings.staleSynced(localizedRelativeDate(lastSyncedAt, language: language, now: now))
-        }
-        return UsageStatus.stale.displayLabel(language: language)
-    }
-
-    guard let lastSyncedAt = snapshot.lastSyncedAt else { return nil }
-    return strings.synced(localizedRelativeDate(lastSyncedAt, language: language, now: now))
 }

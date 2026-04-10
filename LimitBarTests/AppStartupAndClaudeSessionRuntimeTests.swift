@@ -25,15 +25,15 @@ private final class StartupTestSnapshotStore: @unchecked Sendable, SnapshotStori
 }
 
 private final class StartupTestNotificationManager: @unchecked Sendable, NotificationScheduling {
-    private(set) var scheduled: [(accountId: UUID, accountName: String, date: Date)] = []
+    private(set) var scheduled: [(accountId: UUID, date: Date)] = []
     private(set) var cancelled: [(accountId: UUID, accountName: String)] = []
-    private(set) var renewalScheduled: [(identifier: String, accountName: String, date: Date)] = []
+    private(set) var renewalScheduled: [(identifier: String, date: Date)] = []
     private(set) var cancelledIdentifiers: [String] = []
 
     func requestAuthorization() async -> Bool { true }
 
-    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date) {
-        scheduled.append((accountId, accountName, date))
+    func scheduleCooldownReadyNotification(accountId: UUID, at date: Date) {
+        scheduled.append((accountId, date))
     }
 
     func cancelCooldownReadyNotification(accountId: UUID, accountName: String) {
@@ -44,8 +44,8 @@ private final class StartupTestNotificationManager: @unchecked Sendable, Notific
         cancelledIdentifiers.append(contentsOf: identifiers)
     }
 
-    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {
-        renewalScheduled.append((identifier, accountName, date))
+    func scheduleRenewalReminder(identifier: String, at date: Date) {
+        renewalScheduled.append((identifier, date))
     }
 
     func scheduleNotification(

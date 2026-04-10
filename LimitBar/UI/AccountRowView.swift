@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AccountRowView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let account: Account
     let snapshot: UsageSnapshot?
     let metadata: AccountMetadata
@@ -52,12 +53,26 @@ struct AccountRowView: View {
     private var hasMetricsContent: Bool {
         sessionUsage != nil
             || weeklyUsage != nil
+            || hasClaudeTokenDetails
             || presentation.resetAccent != nil
             || presentation.subscriptionChip != nil
             || presentation.syncText != nil
     }
 
+    private var hasClaudeTokenDetails: Bool {
+        account.provider.isClaude
+            && sessionUsage == nil
+            && weeklyUsage == nil
+            && (presentation.totalTokensToday != nil || presentation.totalTokensThisWeek != nil)
+    }
+
     private var rowFillColor: Color {
+        if colorScheme == .light {
+            if isActive {
+                return Color.green.opacity(0.075)
+            }
+            return Color.black.opacity(isRowHovered ? 0.07 : 0.05)
+        }
         if isActive {
             return Color.green.opacity(0.06)
         }
@@ -65,10 +80,28 @@ struct AccountRowView: View {
     }
 
     private var rowStrokeColor: Color {
+        if colorScheme == .light {
+            if isActive {
+                return Color.green.opacity(0.2)
+            }
+            return Color.black.opacity(isRowHovered ? 0.12 : 0.08)
+        }
         if isActive {
             return Color.green.opacity(0.18)
         }
         return Color.primary.opacity(isRowHovered ? 0.09 : 0.04)
+    }
+
+    private var clusterSurfaceFill: Color {
+        colorScheme == .light ? Color.black.opacity(0.042) : Color.primary.opacity(0.022)
+    }
+
+    private var detailBlockSurfaceFill: Color {
+        colorScheme == .light ? Color.black.opacity(0.04) : Color.primary.opacity(0.022)
+    }
+
+    private var detailRowSurfaceFill: Color {
+        colorScheme == .light ? Color.black.opacity(0.05) : Color.primary.opacity(0.028)
     }
 
     var body: some View {
@@ -140,9 +173,6 @@ struct AccountRowView: View {
             if quotaDisplayMode != .subscriptionExpired,
                sessionUsage != nil || weeklyUsage != nil {
                 gaugeCluster
-            } else if quotaDisplayMode != .subscriptionExpired,
-                      let tokenDials = claudeTokenDials {
-                claudeGaugeCluster(tokenDials)
             }
 
             VStack(alignment: .leading, spacing: 5) {
@@ -150,70 +180,6 @@ struct AccountRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-    }
-
-    private var claudeTokenDials: (today: Int, week: Int)? {
-        guard account.provider.isClaude,
-              let today = presentation.totalTokensToday,
-              let week = presentation.totalTokensThisWeek,
-              week > 0 else { return nil }
-        return (today: today, week: week)
-    }
-
-    private func claudeGaugeCluster(_ dials: (today: Int, week: Int)) -> some View {
-        HStack(alignment: .center, spacing: 6) {
-            claudeTokenDialCard(
-                title: strings.tokensToday,
-                count: dials.today,
-                arcProgress: min(1.0, Double(dials.today) / Double(dials.week))
-            )
-            claudeTokenDialCard(
-                title: strings.tokensWeek,
-                count: dials.week,
-                arcProgress: 1.0,
-                isMuted: true
-            )
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 7)
-        .frame(height: metricsBlockHeight)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.022))
-        )
-    }
-
-    private func claudeTokenDialCard(title: String, count: Int, arcProgress: Double, isMuted: Bool = false) -> some View {
-        VStack(spacing: 3) {
-            ZStack {
-                GaugeArcShape(progress: 1)
-                    .stroke(
-                        Color.secondary.opacity(0.16),
-                        style: StrokeStyle(lineWidth: 4.0, lineCap: .round)
-                    )
-                if !isMuted {
-                    GaugeArcShape(progress: arcProgress)
-                        .stroke(
-                            Color.purple.opacity(0.75),
-                            style: StrokeStyle(lineWidth: 4.0, lineCap: .round)
-                        )
-                }
-                Text(strings.formattedTokens(count))
-                    .font(.system(size: 9.5, weight: .bold).monospacedDigit())
-                    .foregroundStyle(isMuted ? .secondary : .primary)
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .frame(width: 32)
-            }
-            .frame(width: 40, height: 40)
-
-            Text(title)
-                .font(.system(size: 9.5, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(width: 54)
-        .frame(minHeight: 54)
     }
 
     private var gaugeCluster: some View {
@@ -239,7 +205,7 @@ struct AccountRowView: View {
         .frame(height: metricsBlockHeight)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.022))
+                .fill(clusterSurfaceFill)
         )
     }
 
@@ -250,6 +216,8 @@ struct AccountRowView: View {
                 subscriptionExpiredBlock
             case .normal where sessionUsage != nil || weeklyUsage != nil:
                 quotaScheduleBlock
+            case .normal where hasClaudeTokenDetails:
+                claudeTokenDetailsBlock
             case .sessionCooldown:
                 sessionCooldownBlock
             case .weeklyLock:
@@ -278,37 +246,12 @@ struct AccountRowView: View {
                 }
             }
 
-            if quotaDisplayMode != .subscriptionExpired,
-               sessionUsage == nil, weeklyUsage == nil,
-               let tokensToday = presentation.totalTokensToday {
-                detailRow(
-                    title: strings.tokensToday,
-                    value: strings.formattedTokens(tokensToday),
-                    tone: Color.primary
-                )
-
-                if let tokensWeek = presentation.totalTokensThisWeek {
-                    detailRow(
-                        title: strings.tokensWeek,
-                        value: strings.formattedTokens(tokensWeek),
-                        tone: Color.secondary
-                    )
-                }
-
-                if let planLabel = presentation.planLabel {
-                    detailRow(
-                        title: strings.plan,
-                        value: planLabel,
-                        tone: Color.secondary
-                    )
-                }
-            }
         }
         .padding(.horizontal, metricsBlockPadding)
         .padding(.vertical, metricsBlockPadding)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.022))
+                .fill(detailBlockSurfaceFill)
         )
     }
 
@@ -392,6 +335,32 @@ struct AccountRowView: View {
         }
     }
 
+    private var claudeTokenDetailsBlock: some View {
+        Group {
+            if let tokensTodayValueText {
+                detailRow(
+                    title: strings.tokensToday,
+                    value: tokensTodayValueText,
+                    tone: .secondary
+                )
+            }
+
+            if let tokensWeekValueText {
+                detailRow(
+                    title: strings.tokensWeek,
+                    value: tokensWeekValueText,
+                    tone: .secondary
+                )
+            }
+
+            detailRow(
+                title: strings.subscription,
+                value: subscriptionValueText ?? "--",
+                tone: presentation.subscriptionChip?.tone.color ?? .secondary
+            )
+        }
+    }
+
     private var dailyResetValueText: String {
         guard let nextResetAt = snapshot?.nextResetAt else {
             return "--"
@@ -419,8 +388,22 @@ struct AccountRowView: View {
         return subscriptionChip.text
     }
 
+    private var tokensTodayValueText: String? {
+        guard let count = presentation.totalTokensToday else {
+            return nil
+        }
+        return strings.formattedTokens(count)
+    }
+
+    private var tokensWeekValueText: String? {
+        guard let count = presentation.totalTokensThisWeek else {
+            return nil
+        }
+        return strings.formattedTokens(count)
+    }
+
     private var providerMark: some View {
-        ProviderMarkView(provider: account.provider, size: .compact)
+        ProviderMarkView(provider: account.provider, size: .compact, style: .accountList)
     }
 
     private func planBadge(_ text: String) -> some View {
@@ -485,27 +468,6 @@ struct AccountRowView: View {
         .help(strings.switchAccountHelp)
     }
 
-    private func chip(_ chip: PresentationChip, softened: Bool = false) -> some View {
-        Text(chip.text)
-            .font(
-                chip.monospaced
-                    ? .system(size: softened ? 9 : 9.5).monospacedDigit()
-                    : .system(size: softened ? 9 : 9.5, weight: .medium)
-            )
-            .foregroundStyle(chip.style.foreground(for: chip.tone.color))
-            .padding(.horizontal, softened ? 4.5 : 5)
-            .padding(.vertical, 2)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(chip.style.background(for: chip.tone.color))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(chip.style.border(for: chip.tone.color), lineWidth: chip.style == .outlined ? 1 : 0)
-            )
-            .opacity(softened ? 0.76 : 1)
-    }
-
     private func usageDialCard(title: String, remainingPercent: Int, tone: Color) -> some View {
         VStack(spacing: 3) {
             UsageDialView(
@@ -544,7 +506,7 @@ struct AccountRowView: View {
         .frame(height: detailRowHeight)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.028))
+                .fill(detailRowSurfaceFill)
         )
     }
 
@@ -684,33 +646,6 @@ private extension PresentationTone {
             return .orange
         case .red:
             return .red
-        }
-    }
-}
-
-private extension PresentationChipStyle {
-    func background(for color: Color) -> Color {
-        switch self {
-        case .filled:
-            return color.opacity(0.12)
-        case .outlined:
-            return Color.clear
-        }
-    }
-
-    func foreground(for color: Color) -> Color {
-        switch self {
-        case .filled, .outlined:
-            return color
-        }
-    }
-
-    func border(for color: Color) -> Color {
-        switch self {
-        case .filled:
-            return .clear
-        case .outlined:
-            return color.opacity(0.22)
         }
     }
 }

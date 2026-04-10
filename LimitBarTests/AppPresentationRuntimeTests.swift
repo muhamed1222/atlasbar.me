@@ -180,46 +180,52 @@ struct AppPresentationRuntimeTests {
     }
 
     @Test
-    func fullProjectionIncludesMenuBarStateAndSortedAccounts() {
+    func menuBarPresentationAndSortingCanBeComputedSeparately() {
         let runtime = AppPresentationRuntime()
         let now = Date(timeIntervalSince1970: 2_000)
         let better = Account(id: UUID(), provider: .codex, email: "b@example.com", label: nil)
         let lower = Account(id: UUID(), provider: .codex, email: "a@example.com", label: nil)
-        let projection = runtime.makeProjection(
+        let snapshots = [
+            UsageSnapshot(
+                id: UUID(),
+                accountId: lower.id,
+                sessionPercentUsed: 80,
+                weeklyPercentUsed: nil,
+                nextResetAt: nil,
+                subscriptionExpiresAt: nil,
+                usageStatus: .available,
+                sourceConfidence: 1,
+                lastSyncedAt: now.addingTimeInterval(-60),
+                rawExtractedStrings: []
+            ),
+            UsageSnapshot(
+                id: UUID(),
+                accountId: better.id,
+                sessionPercentUsed: 10,
+                weeklyPercentUsed: nil,
+                nextResetAt: nil,
+                subscriptionExpiresAt: nil,
+                usageStatus: .available,
+                sourceConfidence: 1,
+                lastSyncedAt: now,
+                rawExtractedStrings: []
+            )
+        ]
+        let menuBarPresentation = runtime.makeMenuBarPresentation(
             accounts: [lower, better],
-            snapshots: [
-                UsageSnapshot(
-                    id: UUID(),
-                    accountId: lower.id,
-                    sessionPercentUsed: 80,
-                    weeklyPercentUsed: nil,
-                    nextResetAt: nil,
-                    subscriptionExpiresAt: nil,
-                    usageStatus: .available,
-                    sourceConfidence: 1,
-                    lastSyncedAt: now.addingTimeInterval(-60),
-                    rawExtractedStrings: []
-                ),
-                UsageSnapshot(
-                    id: UUID(),
-                    accountId: better.id,
-                    sessionPercentUsed: 10,
-                    weeklyPercentUsed: nil,
-                    nextResetAt: nil,
-                    subscriptionExpiresAt: nil,
-                    usageStatus: .available,
-                    sourceConfidence: 1,
-                    lastSyncedAt: now,
-                    rawExtractedStrings: []
-                )
-            ],
-            accountMetadata: [AccountMetadata(accountId: better.id, priority: .primary)],
+            snapshots: snapshots,
             language: .english,
             now: now
         )
+        let sorted = runtime.sortAccounts(
+            accounts: [lower, better],
+            accountMetadata: [AccountMetadata(accountId: better.id, priority: .primary)],
+            snapshots: snapshots,
+            now: now
+        )
 
-        #expect(projection.compactLabel == "S90")
-        #expect(projection.menuBarState == .available)
-        #expect(projection.sortedAccounts.map(\.id) == [better.id, lower.id])
+        #expect(menuBarPresentation.compactLabel == "S90")
+        #expect(menuBarPresentation.menuBarState == MenuBarState.available)
+        #expect(sorted.map(\.id) == [better.id, lower.id])
     }
 }

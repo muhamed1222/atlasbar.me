@@ -6,13 +6,11 @@ private final class RenewalNotificationManagerSpy: @unchecked Sendable, RenewalN
     var scheduled: [RenewalReminderRequest] = []
     var cancelledIdentifiers: [String] = []
 
-    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {
+    func scheduleRenewalReminder(identifier: String, at date: Date) {
         scheduled.append(
             RenewalReminderRequest(
                 identifier: identifier,
-                fireDate: date,
-                title: "Subscription renewal reminder",
-                body: "\(accountName) expires soon."
+                fireDate: date
             )
         )
     }

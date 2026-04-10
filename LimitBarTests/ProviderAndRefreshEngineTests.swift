@@ -13,9 +13,9 @@ private struct RefreshEngineFakeCoordinator: UsageRefreshing {
 
 private final class RefreshEngineNotificationSpy: @unchecked Sendable, NotificationScheduling {
     func requestAuthorization() async -> Bool { true }
-    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date) {}
+    func scheduleCooldownReadyNotification(accountId: UUID, at date: Date) {}
     func cancelCooldownReadyNotification(accountId: UUID, accountName: String) {}
-    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {}
+    func scheduleRenewalReminder(identifier: String, at date: Date) {}
     func cancelNotifications(withIdentifiers identifiers: [String]) {}
 }
 

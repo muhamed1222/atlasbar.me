@@ -2,7 +2,6 @@ import SwiftUI
 
 @main
 struct LimitBarApp: App {
-    private let notificationManager: NotificationManager
     @StateObject private var appModel: AppModel
 
     init() {
@@ -16,7 +15,6 @@ struct LimitBarApp: App {
             ),
             webSessionController: claudeWebSessionController
         )
-        self.notificationManager = notificationManager
         _appModel = StateObject(
             wrappedValue: AppModel(
                 notificationManager: notificationManager,

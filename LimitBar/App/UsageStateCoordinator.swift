@@ -69,28 +69,6 @@ struct UsageStateCoordinator: Sendable {
         )
     }
 
-    func markStale(from state: PersistedState) throws -> UsageStateProjection {
-        let snapshots = state.snapshots.map { snapshot in
-            var staleSnapshot = snapshot
-            staleSnapshot.usageStatus = .stale
-            return staleSnapshot
-        }
-        try persist(
-            accounts: state.accounts,
-            snapshots: snapshots,
-            accountMetadata: state.accountMetadata,
-            settings: state.settings
-        )
-
-        return UsageStateProjection(
-            accounts: state.accounts,
-            snapshots: snapshots,
-            accountMetadata: state.accountMetadata,
-            settings: state.settings,
-            compactLabel: staleCompactLabel(from: snapshots)
-        )
-    }
-
     func markProviderStale(
         _ provider: Provider,
         from state: PersistedState
@@ -305,7 +283,6 @@ struct UsageStateCoordinator: Sendable {
 
         notificationManager.scheduleCooldownReadyNotification(
             accountId: account.id,
-            accountName: account.displayName,
             at: resetAt
         )
     }
@@ -318,16 +295,6 @@ struct UsageStateCoordinator: Sendable {
             return "--"
         }
         return shortUsageLabel(snapshot: latestSnapshot)
-    }
-
-    private func staleCompactLabel(from snapshots: [UsageSnapshot]) -> String {
-        guard !snapshots.isEmpty else {
-            return staleUsageLabel(hasSnapshots: false)
-        }
-        let latestSnapshot = snapshots.sorted(by: {
-            ($0.lastSyncedAt ?? .distantPast) > ($1.lastSyncedAt ?? .distantPast)
-        }).first
-        return latestSnapshot.map { shortUsageLabel(snapshot: $0) } ?? staleUsageLabel(hasSnapshots: true)
     }
 
     private func upsertAccount(

@@ -67,7 +67,6 @@ struct AppStrings {
     var status: String { tr(en: "Status", ru: "Статус") }
     var save: String { tr(en: "Save", ru: "Сохранить") }
     var clear: String { tr(en: "Clear", ru: "Очистить") }
-    var claudeQuotaTitle: String { tr(en: "Claude quota", ru: "Квота Claude") }
     var claudeWebConnected: String { tr(en: "Web session connected", ru: "Web-сессия подключена") }
     var claudeWebMissing: String { tr(en: "Web session missing", ru: "Web-сессия не подключена") }
     var claudeWebDescription: String {
@@ -117,7 +116,6 @@ struct AppStrings {
             ru: "Cookie хранится в зашифрованном виде в macOS Keychain и никуда не передаётся, кроме claude.ai."
         )
     }
-    var claudeSessionCookieSectionTitle: String { tr(en: "Session Cookie", ru: "Cookie сессии") }
     var whileCodexRunning: String { tr(en: "While Codex is running", ru: "Когда Codex запущен") }
     var whileCodexClosed: String { tr(en: "While Codex is closed", ru: "Когда Codex закрыт") }
     var cooldown: String { tr(en: "Cooldown", ru: "Ожидание") }
@@ -169,7 +167,6 @@ struct AppStrings {
             ru: "Приоритет определяет порядок отображения. Основные аккаунты показываются первыми в меню-баре."
         )
     }
-    var noteCharacterLimit: String { tr(en: "500", ru: "500") }
     var optionalNoteFooter: String {
         tr(
             en: "Optional note for renewal context, handoff, or reminders",
@@ -183,13 +180,8 @@ struct AppStrings {
     var expiresToday: String { tr(en: "Expires today", ru: "Истекает сегодня") }
     var sessionReset: String { tr(en: "Session reset", ru: "Сброс сессии") }
     var weeklyResetTitle: String { tr(en: "Weekly reset", ru: "Сброс недели") }
-    var updatedPrefix: String { tr(en: "Updated", ru: "Обновлено") }
-    var syncedPrefix: String { tr(en: "Synced", ru: "Синхронизировано") }
-    var staleSyncedSeparator: String { tr(en: "Stale ·", ru: "Устарело ·") }
     var ready: String { tr(en: "Ready", ru: "Готово") }
     var offline: String { tr(en: "Offline", ru: "Офлайн") }
-    var openCodexToStartTracking: String { tr(en: "Open Codex or connect Claude to start tracking", ru: "Откройте Codex или подключите Claude, чтобы начать отслеживание") }
-    var readingUsageData: String { tr(en: "Reading Codex and Claude usage…", ru: "Читаю usage-данные Codex и Claude…") }
     var emptyAccountsTitle: String { tr(en: "No tracked accounts yet", ru: "Пока нет отслеживаемых аккаунтов") }
     var emptyAccountsConnectHint: String {
         tr(
@@ -208,15 +200,11 @@ struct AppStrings {
     var downloadUpdate: String { tr(en: "Download update", ru: "Скачать обновление") }
     var dismissUpdate: String { tr(en: "Dismiss this update", ru: "Скрыть это обновление") }
     var quit: String { tr(en: "Quit", ru: "Выход") }
-    var codexRunning: String { tr(en: "Codex running", ru: "Codex запущен") }
-    var codexNotRunning: String { tr(en: "Codex not running", ru: "Codex не запущен") }
     var deleteAccountHelp: String { tr(en: "Delete account", ru: "Удалить аккаунт") }
     var switchAccountHelp: String { tr(en: "Switch to this account", ru: "Переключиться на этот аккаунт") }
     var activeAccountLabel: String { tr(en: "Active", ru: "Активен") }
-    var switchingAccount: String { tr(en: "Switching…", ru: "Переключение…") }
     var tokensToday: String { tr(en: "Today", ru: "Сегодня") }
     var tokensWeek: String { tr(en: "Week", ru: "Неделя") }
-    var tokensUnit: String { tr(en: "tokens", ru: "токенов") }
 
     func formattedTokens(_ count: Int) -> String {
         if count >= 1_000_000 {
@@ -357,37 +345,8 @@ struct AppStrings {
         }
     }
 
-    func subscriptionStateLabel(_ state: SubscriptionDerivedState) -> String {
-        switch (language, state) {
-        case (.english, .active):
-            return "Active"
-        case (.english, .expiringSoon):
-            return "Expires soon"
-        case (.english, .expired):
-            return "Expired"
-        case (.english, .unknown):
-            return "Unknown"
-        case (.russian, .active):
-            return "Активна"
-        case (.russian, .expiringSoon):
-            return "Скоро истекает"
-        case (.russian, .expired):
-            return "Истекла"
-        case (.russian, .unknown):
-            return "Неизвестно"
-        }
-    }
-
     func synced(_ relative: String) -> String {
         tr(en: "Synced \(relative)", ru: "Синхронизировано \(relative)")
-    }
-
-    func updated(_ relative: String) -> String {
-        tr(en: "Updated \(relative)", ru: "Обновлено \(relative)")
-    }
-
-    func staleSynced(_ relative: String) -> String {
-        tr(en: "Stale · Synced \(relative)", ru: "Устарело · Синхронизировано \(relative)")
     }
 
     func expires(_ date: String) -> String {

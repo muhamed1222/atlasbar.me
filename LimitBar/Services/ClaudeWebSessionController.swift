@@ -44,16 +44,6 @@ final class ClaudeWebSessionController: NSObject, ObservableObject, @unchecked S
         internalWebView.load(URLRequest(url: Self.usageURL))
     }
 
-    func hasUsableSession() async -> Bool {
-        do {
-            try await ensureUsagePageLoaded()
-            let result = try await execute(script: Self.accountProfileScript)
-            return result.status == 200
-        } catch {
-            return false
-        }
-    }
-
     func clearSession() async throws {
         let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
         let records = await websiteDataStore.dataRecords(ofTypes: dataTypes)
@@ -145,19 +135,6 @@ final class ClaudeWebSessionController: NSObject, ObservableObject, @unchecked S
 
     private static let usageURL = URL(string: "https://claude.ai/settings/usage")!
 
-    private static let accountProfileScript = """
-        const response = await fetch('/api/account_profile', {
-          credentials: 'include',
-          headers: { Accept: 'application/json, text/plain, */*' }
-        });
-        return {
-          status: response.status,
-          body: await response.text(),
-          url: window.location.href,
-          organizationUUID: null
-        };
-        """
-
     private static let usageScript = """
         const argOrg = arguments.organizationUUID ?? null;
         const cookieMatch = document.cookie.match(/(?:^|;\\s*)lastActiveOrg=([^;]+)/);
@@ -241,7 +218,6 @@ extension ClaudeWebSessionController: WKNavigationDelegate {
 struct ClaudeWebFetchResult: Decodable, Sendable {
     let status: Int
     let body: String
-    let url: String
     let organizationUUID: String?
 }
 

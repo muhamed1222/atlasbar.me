@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 
 enum UsageStatus: String, Codable {
     case available
@@ -10,16 +9,6 @@ enum UsageStatus: String, Codable {
 
     func displayLabel(language: ResolvedAppLanguage = .english) -> String {
         AppStrings(language: language).statusLabel(self)
-    }
-
-    var color: Color {
-        switch self {
-        case .available:   return .green
-        case .coolingDown: return .yellow
-        case .exhausted:   return .red
-        case .unknown:     return Color.secondary
-        case .stale:       return Color.secondary
-        }
     }
 }
 

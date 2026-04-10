@@ -58,7 +58,6 @@ func cooldownNotificationBodyDoesNotExposeAccountIdentity() async throws {
 
     manager.scheduleCooldownReadyNotification(
         accountId: accountId,
-        accountName: "private@example.com",
         at: Date().addingTimeInterval(60)
     )
 
@@ -80,7 +79,6 @@ func renewalReminderBodyDoesNotExposeAccountIdentity() async throws {
 
     manager.scheduleRenewalReminder(
         identifier: "renewal-test",
-        accountName: "private@example.com",
         at: Date().addingTimeInterval(60)
     )
 
@@ -115,7 +113,6 @@ func cancellingNotificationStopsInFlightSchedulingTask() async throws {
 
     manager.scheduleCooldownReadyNotification(
         accountId: accountId,
-        accountName: "private@example.com",
         at: Date().addingTimeInterval(60)
     )
 

@@ -8,7 +8,6 @@ struct CodexAccountInfo: Equatable, Sendable {
     var planType: String?
     var subscriptionExpiresAt: Date?
     var accountId: String?
-    var userId: String?
 }
 
 protocol CodexAuthReading: Sendable {
@@ -41,16 +40,13 @@ struct CodexAuthReader {
         let openaiAuth = payload["https://api.openai.com/auth"] as? [String: Any]
         let planType = openaiAuth?["chatgpt_plan_type"] as? String
         let expiryString = openaiAuth?["chatgpt_subscription_active_until"] as? String
-        let userId = openaiAuth?["chatgpt_user_id"] as? String
-
         let subscriptionExpiresAt = expiryString.flatMap { parseISO8601($0) }
 
         return CodexAccountInfo(
             email: email,
             planType: planType,
             subscriptionExpiresAt: subscriptionExpiresAt,
-            accountId: accountId,
-            userId: userId
+            accountId: accountId
         )
     }
 

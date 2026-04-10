@@ -157,7 +157,6 @@ struct RefreshEngine: Sendable {
 
         notificationManager.scheduleCooldownReadyNotification(
             accountId: account.id,
-            accountName: account.displayName,
             at: resetAt
         )
     }

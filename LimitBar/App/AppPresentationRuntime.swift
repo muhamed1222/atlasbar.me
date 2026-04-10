@@ -5,37 +5,7 @@ struct MenuBarPresentationProjection: Equatable {
     let menuBarState: MenuBarState
 }
 
-struct AppPresentationProjection: Equatable {
-    let compactLabel: String
-    let menuBarState: MenuBarState
-    let sortedAccounts: [Account]
-}
-
 struct AppPresentationRuntime: Sendable {
-    func makeProjection(
-        accounts: [Account],
-        snapshots: [UsageSnapshot],
-        accountMetadata: [AccountMetadata],
-        language: ResolvedAppLanguage,
-        now: Date = .now
-    ) -> AppPresentationProjection {
-        let menuBarPresentation = makeMenuBarPresentation(
-            accounts: accounts,
-            snapshots: snapshots,
-            language: language,
-            now: now
-        )
-        return AppPresentationProjection(
-            compactLabel: menuBarPresentation.compactLabel,
-            menuBarState: menuBarPresentation.menuBarState,
-            sortedAccounts: sortAccounts(
-                accounts: accounts,
-                accountMetadata: accountMetadata,
-                snapshots: snapshots
-            )
-        )
-    }
-
     func makeMenuBarPresentation(
         accounts: [Account],
         snapshots: [UsageSnapshot],

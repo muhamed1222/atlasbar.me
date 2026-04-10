@@ -262,22 +262,22 @@ private final class SaveFailingSnapshotStore: @unchecked Sendable, SnapshotStori
 }
 
 private final class RecordingNotificationManager: @unchecked Sendable, NotificationScheduling {
-    private(set) var scheduled: [(accountId: UUID, accountName: String, date: Date)] = []
+    private(set) var scheduled: [(accountId: UUID, date: Date)] = []
     private(set) var cancelled: [(accountId: UUID, accountName: String)] = []
 
     func requestAuthorization() async -> Bool {
         true
     }
 
-    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date) {
-        scheduled.append((accountId, accountName, date))
+    func scheduleCooldownReadyNotification(accountId: UUID, at date: Date) {
+        scheduled.append((accountId, date))
     }
 
     func cancelCooldownReadyNotification(accountId: UUID, accountName: String) {
         cancelled.append((accountId, accountName))
     }
 
-    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {}
+    func scheduleRenewalReminder(identifier: String, at date: Date) {}
 
     func cancelNotifications(withIdentifiers identifiers: [String]) {}
 }
@@ -332,7 +332,7 @@ private func makeAppModelTempStore() throws -> SnapshotStore {
 }
 
 private final class NotificationManagerSpy: @unchecked Sendable, NotificationScheduling {
-    var cooldownScheduled: [(accountId: UUID, accountName: String, date: Date)] = []
+    var cooldownScheduled: [(accountId: UUID, date: Date)] = []
     var cooldownCancelled: [(accountId: UUID, accountName: String)] = []
     var renewalScheduled: [RenewalReminderRequest] = []
     var cancelledIdentifiers: [String] = []
@@ -341,21 +341,19 @@ private final class NotificationManagerSpy: @unchecked Sendable, NotificationSch
         true
     }
 
-    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date) {
-        cooldownScheduled.append((accountId, accountName, date))
+    func scheduleCooldownReadyNotification(accountId: UUID, at date: Date) {
+        cooldownScheduled.append((accountId, date))
     }
 
     func cancelCooldownReadyNotification(accountId: UUID, accountName: String) {
         cooldownCancelled.append((accountId, accountName))
     }
 
-    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {
+    func scheduleRenewalReminder(identifier: String, at date: Date) {
         renewalScheduled.append(
             RenewalReminderRequest(
                 identifier: identifier,
-                fireDate: date,
-                title: "Subscription renewal reminder",
-                body: "\(accountName) expires soon."
+                fireDate: date
             )
         )
     }
@@ -931,7 +929,6 @@ struct AppModelTests {
         )
 
         #expect(notificationManager.cooldownScheduled.count == 1)
-        #expect(notificationManager.cooldownScheduled.first?.accountName == account.displayName)
         #expect(Set(notificationManager.cancelledIdentifiers).count == 4)
         #expect(notificationManager.renewalScheduled.count == 2)
     }
@@ -1008,8 +1005,7 @@ struct AppModelTests {
             email: "user@example.com",
             planType: "pro",
             subscriptionExpiresAt: Date(timeIntervalSince1970: 1_700_000_000),
-            accountId: "acc_123",
-            userId: "user_123"
+            accountId: "acc_123"
         )
         let usageData = CodexUsageData(
             sessionPercentUsed: 84,
@@ -1040,15 +1036,13 @@ struct AppModelTests {
             email: "user@example.com",
             planType: "free",
             subscriptionExpiresAt: nil,
-            accountId: "acc_123",
-            userId: "user_123"
+            accountId: "acc_123"
         )
         let refreshedAuthInfo = CodexAccountInfo(
             email: "user@example.com",
             planType: "plus",
             subscriptionExpiresAt: Date(timeIntervalSince1970: 1_700_000_000),
-            accountId: "acc_123",
-            userId: "user_123"
+            accountId: "acc_123"
         )
         let usageData = CodexUsageData(
             sessionPercentUsed: 84,
@@ -1086,8 +1080,7 @@ struct AppModelTests {
             email: nil,
             planType: nil,
             subscriptionExpiresAt: nil,
-            accountId: "acc_123",
-            userId: nil
+            accountId: "acc_123"
         )
 
         let result = await api.fetchUsage(authInfo: authInfo)
@@ -1117,8 +1110,7 @@ struct AppModelTests {
             email: nil,
             planType: nil,
             subscriptionExpiresAt: nil,
-            accountId: nil,
-            userId: nil
+            accountId: nil
         )
 
         let result = await api.fetchUsage(authInfo: authInfo)
@@ -1271,41 +1263,6 @@ struct AppModelTests {
     }
 
     @Test
-    func currentUsagePayloadHelpersReflectUsageAndMergePrimaryMetadata() {
-        let primary = CurrentUsagePayload(
-            accountIdentifier: "primary@example.com",
-            planType: "pro",
-            subscriptionExpiresAt: Date(timeIntervalSince1970: 1_700_000_000),
-            sessionPercentUsed: nil,
-            weeklyPercentUsed: nil,
-            nextResetAt: nil,
-            usageStatus: .unknown,
-            sourceConfidence: 0.0,
-            rawExtractedStrings: []
-        )
-        let fallback = CurrentUsagePayload(
-            accountIdentifier: nil,
-            planType: nil,
-            subscriptionExpiresAt: nil,
-            sessionPercentUsed: 42,
-            weeklyPercentUsed: nil,
-            nextResetAt: nil,
-            usageStatus: .available,
-            sourceConfidence: 0.7,
-            rawExtractedStrings: ["usage"]
-        )
-
-        let merged = fallback.mergingMetadata(from: primary)
-
-        #expect(primary.hasUsageData == false)
-        #expect(fallback.hasUsageData == true)
-        #expect(merged.accountIdentifier == "primary@example.com")
-        #expect(merged.planType == "pro")
-        #expect(merged.sessionPercentUsed == 42)
-        #expect(merged.usageStatus == .available)
-    }
-
-    @Test
     func refreshUsesProviderAndSchedulesNotification() async {
         let store = InMemorySnapshotStore()
         let notifications = RecordingNotificationManager()
@@ -1335,7 +1292,7 @@ struct AppModelTests {
         #expect(model.accounts.count == 1)
         #expect(model.snapshots.count == 1)
         #expect(model.accounts.first?.email == "user@example.com")
-        #expect(model.compactLabel.contains("m"))
+        #expect(model.compactLabel.contains(AppStrings(language: model.resolvedLanguage).shortMinuteUnit))
         #expect(notifications.scheduled.count == 1)
     }
 
@@ -1365,8 +1322,9 @@ struct AppModelTests {
 
         await model.refreshNowAsync()
 
-        #expect(model.compactLabel.contains("h"))
-        #expect(model.compactLabel.contains("m"))
+        let strings = AppStrings(language: model.resolvedLanguage)
+        #expect(model.compactLabel.contains(strings.shortHourUnit))
+        #expect(model.compactLabel.contains(strings.shortMinuteUnit))
         #expect(notifications.scheduled.count == 1)
         #expect(notifications.scheduled.first?.date == resetAt)
     }
@@ -1532,7 +1490,6 @@ struct AppModelTests {
         #expect(
             notifications.scheduled.contains {
                 $0.accountId == backupAccount.id &&
-                $0.accountName == backupAccount.displayName &&
                 $0.date == backupResetAt
             }
         )
@@ -1955,7 +1912,6 @@ struct AppModelTests {
               }
             }
             """,
-            url: "https://claude.ai/settings/usage",
             organizationUUID: "org-123"
         )
 
@@ -1991,7 +1947,6 @@ struct AppModelTests {
               }
             }
             """,
-            url: "https://claude.ai/settings/usage",
             organizationUUID: "org-999"
         )
 
@@ -2026,7 +1981,6 @@ struct AppModelTests {
               }
             }
             """,
-            url: "https://claude.ai/settings/usage",
             organizationUUID: "org-old"
         )
 
@@ -2067,7 +2021,6 @@ struct AppModelTests {
               }
             }
             """,
-            url: "https://claude.ai/settings/usage",
             organizationUUID: "org-123"
         )
 

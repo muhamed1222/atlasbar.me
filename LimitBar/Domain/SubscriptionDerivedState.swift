@@ -18,8 +18,4 @@ enum SubscriptionDerivedState: String, Codable, Equatable {
         }
         return .active
     }
-
-    func displayLabel(language: ResolvedAppLanguage = .english) -> String {
-        AppStrings(language: language).subscriptionStateLabel(self)
-    }
 }

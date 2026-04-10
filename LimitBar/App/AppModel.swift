@@ -44,10 +44,7 @@ final class AppModel: ObservableObject {
         resolvedLanguage.locale
     }
 
-    private let usageProvider: any CurrentUsageProviding
     private let claudeUsageProvider: (any CurrentUsageProviding)?
-    private let claudeUsagePipeline: (any ClaudeUsagePipelining)?
-    private let runningChecker: any CodexRunningChecking
     private let pollingCoordinator: PollingCoordinator
     private let stateCoordinator: UsageStateCoordinator
     private let refreshEngine: RefreshEngine
@@ -80,10 +77,7 @@ final class AppModel: ObservableObject {
         appUpdateChecker: (any AppUpdateChecking)? = nil,
         shouldStartPolling: Bool = AppRuntimeDefaults.shouldStartPolling
     ) {
-        self.usageProvider = usageProvider
         self.claudeUsageProvider = claudeUsageProvider ?? claudeUsagePipeline
-        self.claudeUsagePipeline = claudeUsagePipeline
-        self.runningChecker = runningChecker
         self.pollingCoordinator = pollingCoordinator
         self.vault = vault ?? AccountVault()
         self.sessionSwitcher = sessionSwitcher ?? CodexSessionSwitcher(vault: self.vault)
@@ -505,10 +499,9 @@ final class AppModel: ObservableObject {
     }
 
     private func applyPresentation(now: Date = .now) {
-        let projection = presentationRuntime.makeProjection(
+        let projection = presentationRuntime.makeMenuBarPresentation(
             accounts: accounts,
             snapshots: snapshots,
-            accountMetadata: accountMetadata,
             language: resolvedLanguage,
             now: now
         )
@@ -537,11 +530,9 @@ final class AppModel: ObservableObject {
     private func upsertMetadata(for accountId: UUID, update: (inout AccountMetadata) -> Void) {
         if let index = accountMetadata.firstIndex(where: { $0.accountId == accountId }) {
             update(&accountMetadata[index])
-            accountMetadata[index].updatedAt = .now
         } else {
             var metadata = AccountMetadata(accountId: accountId)
             update(&metadata)
-            metadata.updatedAt = .now
             accountMetadata.append(metadata)
         }
         persistCurrentState()

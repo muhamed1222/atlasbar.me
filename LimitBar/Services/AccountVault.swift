@@ -103,10 +103,6 @@ struct AccountVault: AccountVaulting {
         return try? JSONDecoder().decode(StoredAuthVault.self, from: data)
     }
 
-    private func loadLegacyItemFromKeychain(email: String, allowsUserInteraction: Bool) -> Data? {
-        loadKeychainItem(account: email, allowsUserInteraction: allowsUserInteraction)
-    }
-
     private func loadFileSnapshot(email: String) -> Data? {
         let normalizedURL = Self.fileVaultDirectory.appendingPathComponent(normalizedFilename(for: email))
         if let data = try? Data(contentsOf: normalizedURL) {

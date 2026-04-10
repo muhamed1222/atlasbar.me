@@ -20,7 +20,7 @@ struct CompactStatusView: View {
 
 @MainActor
 private enum CompactStatusLabelRenderer {
-    private static let iconSize = NSSize(width: 14, height: 14)
+    private static let iconSize = NSSize(width: 15, height: 15)
     private static let itemSpacing: CGFloat = 5
 
     private static var cachedItems: [CompactMenuBarItem] = []
@@ -65,7 +65,7 @@ private enum CompactStatusLabelRenderer {
 
     private static func iconImage(for provider: Provider) -> NSImage {
         let renderer = ImageRenderer(
-            content: ProviderMarkView(provider: provider, size: .compact, style: .glyphOnly)
+            content: ProviderMarkView(provider: provider, size: .compact, style: .menuBarGlyph)
                 .foregroundStyle(Color.black)
         )
         renderer.scale = NSScreen.main?.backingScaleFactor ?? 2

@@ -71,8 +71,8 @@ struct CodexSessionSwitcherTests {
         let vault = SessionSwitcherVaultSpy()
         let appController = AppControllerSpy()
         let authReader = AuthReaderSequence([
-            CodexAccountInfo(email: "old@example.com", planType: nil, subscriptionExpiresAt: nil, accountId: nil, userId: nil),
-            CodexAccountInfo(email: "target@example.com", planType: nil, subscriptionExpiresAt: nil, accountId: nil, userId: nil)
+            CodexAccountInfo(email: "old@example.com", planType: nil, subscriptionExpiresAt: nil, accountId: nil),
+            CodexAccountInfo(email: "target@example.com", planType: nil, subscriptionExpiresAt: nil, accountId: nil)
         ])
         let switcher = CodexSessionSwitcher(
             vault: vault,
@@ -93,7 +93,7 @@ struct CodexSessionSwitcherTests {
         let vault = SessionSwitcherVaultSpy()
         let appController = AppControllerSpy()
         let authReader = AuthReaderSequence([
-            CodexAccountInfo(email: "old@example.com", planType: nil, subscriptionExpiresAt: nil, accountId: nil, userId: nil)
+            CodexAccountInfo(email: "old@example.com", planType: nil, subscriptionExpiresAt: nil, accountId: nil)
         ])
         let switcher = CodexSessionSwitcher(
             vault: vault,

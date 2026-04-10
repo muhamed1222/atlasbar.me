@@ -9,7 +9,7 @@ protocol UserNotificationCentering: AnyObject, Sendable {
 
 protocol NotificationScheduling: RenewalNotificationScheduling, AnyObject, Sendable {
     func requestAuthorization() async -> Bool
-    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date)
+    func scheduleCooldownReadyNotification(accountId: UUID, at date: Date)
     func cancelCooldownReadyNotification(accountId: UUID, accountName: String)
 }
 
@@ -105,7 +105,7 @@ final class NotificationManager: @unchecked Sendable, NotificationScheduling {
         await authorizationCoordinator.requestAuthorization()
     }
 
-    func scheduleCooldownReadyNotification(accountId: UUID, accountName: String, at date: Date) {
+    func scheduleCooldownReadyNotification(accountId: UUID, at date: Date) {
         let identifier = cooldownIdentifier(for: accountId)
         scheduleNotification(
             identifier: identifier,
@@ -130,7 +130,7 @@ final class NotificationManager: @unchecked Sendable, NotificationScheduling {
         )
     }
 
-    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date) {
+    func scheduleRenewalReminder(identifier: String, at date: Date) {
         scheduleNotification(
             identifier: identifier,
             title: "Subscription renewal reminder",

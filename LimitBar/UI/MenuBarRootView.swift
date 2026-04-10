@@ -10,47 +10,43 @@ func accountsSectionMaxHeight(for accountCount: Int) -> CGFloat {
 
 struct MenuBarRootView: View {
     @EnvironmentObject private var appModel: AppModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var accountPendingDeletion: Account?
-    @State private var isShowingDeleteConfirmation = false
 
     var body: some View {
         let strings = appModel.strings
 
-        VStack(alignment: .leading, spacing: 0) {
-            headerSection
-            sectionDivider
-            accountsSection
-            sectionDivider
-            actionsSection
+        ZStack {
+            VStack(alignment: .leading, spacing: 0) {
+                headerSection
+                sectionDivider
+                accountsSection
+                sectionDivider
+                actionsSection
+            }
+            .allowsHitTesting(accountPendingDeletion == nil)
+
+            if accountPendingDeletion != nil {
+                deleteConfirmationOverlay(strings: strings)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
         }
         .frame(width: 392)
         .padding(6)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(NSColor.windowBackgroundColor).opacity(0.97))
+            ZStack {
+                VisualEffectBackdrop(material: colorScheme == .light ? .sidebar : .hudWindow)
+
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(NSColor.windowBackgroundColor).opacity(colorScheme == .light ? 0.7 : 0.5))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                .stroke(Color.primary.opacity(colorScheme == .light ? 0.1 : 0.06), lineWidth: 1)
         )
-        .confirmationDialog(
-            strings.deleteAccountTitle,
-            isPresented: $isShowingDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(strings.delete, role: .destructive) {
-                guard let accountPendingDeletion else { return }
-                appModel.deleteAccount(accountPendingDeletion)
-                self.accountPendingDeletion = nil
-                isShowingDeleteConfirmation = false
-            }
-            Button(strings.cancel, role: .cancel) {
-                accountPendingDeletion = nil
-                isShowingDeleteConfirmation = false
-            }
-        } message: {
-            Text(accountPendingDeletion?.displayName ?? strings.account)
-        }
+        .animation(.easeOut(duration: 0.16), value: accountPendingDeletion != nil)
     }
 
     // MARK: - Header
@@ -61,6 +57,7 @@ struct MenuBarRootView: View {
                 LimitBarLogoView(size: .compact)
                 Text("Limit Bar")
                     .font(.system(size: 13.5, weight: .semibold))
+                betaBadge
                 if let lastRefreshAt = appModel.lastRefreshAt {
                     Text("· \(localizedRelativeDate(lastRefreshAt, language: appModel.resolvedLanguage))")
                         .font(.system(size: 10.5, weight: .medium))
@@ -91,6 +88,22 @@ struct MenuBarRootView: View {
         .padding(.horizontal, 10)
         .padding(.top, 8)
         .padding(.bottom, 7)
+    }
+
+    private var betaBadge: some View {
+        Text("BETA")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.accentColor.opacity(0.12))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.24), lineWidth: 1)
+            )
     }
 
     private var headerSettingsButton: some View {
@@ -236,7 +249,7 @@ struct MenuBarRootView: View {
                 .padding(.vertical, 2)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(Color.primary.opacity(0.05))
+                        .fill(Color.primary.opacity(colorScheme == .light ? 0.08 : 0.05))
                 )
         }
         .padding(.horizontal, 10)
@@ -256,7 +269,6 @@ struct MenuBarRootView: View {
                     canSwitch: appModel.canSwitch(to: account),
                     onDelete: {
                         accountPendingDeletion = account
-                        isShowingDeleteConfirmation = true
                     },
                     onSwitch: { appModel.switchToAccount(account) },
                     language: appModel.resolvedLanguage
@@ -318,21 +330,101 @@ struct MenuBarRootView: View {
 
     private var sectionDivider: some View {
         Rectangle()
-            .fill(Color.primary.opacity(0.07))
+            .fill(Color.primary.opacity(colorScheme == .light ? 0.1 : 0.07))
             .frame(height: 0.5)
+    }
+
+    private func deleteConfirmationOverlay(strings: AppStrings) -> some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .light ? 0.12 : 0.22)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    cancelPendingDeletion()
+                }
+
+            VStack(alignment: .leading, spacing: 14) {
+                Text(strings.deleteAccountTitle)
+                    .font(.system(size: 14, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(accountPendingDeletion?.displayName ?? strings.account)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+
+                HStack(spacing: 10) {
+                    Button(strings.cancel) {
+                        cancelPendingDeletion()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                    .frame(maxWidth: .infinity)
+
+                    Button(strings.delete, role: .destructive) {
+                        confirmPendingDeletion()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .frame(width: 336)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(NSColor.windowBackgroundColor).opacity(colorScheme == .light ? 0.995 : 0.985))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.primary.opacity(colorScheme == .light ? 0.12 : 0.08), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(colorScheme == .light ? 0.12 : 0.26), radius: 20, y: 8)
+        }
+    }
+
+    private func cancelPendingDeletion() {
+        accountPendingDeletion = nil
+    }
+
+    private func confirmPendingDeletion() {
+        guard let accountPendingDeletion else { return }
+        appModel.deleteAccount(accountPendingDeletion)
+        self.accountPendingDeletion = nil
+    }
+}
+
+private struct VisualEffectBackdrop: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.material = material
+        view.isEmphasized = false
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.state = .active
     }
 }
 
 private struct HeaderIconButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(configuration.isPressed ? 0.1 : 0.05))
+                    .fill(Color.primary.opacity(configuration.isPressed ? (colorScheme == .light ? 0.12 : 0.1) : (colorScheme == .light ? 0.07 : 0.05)))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                    .stroke(Color.primary.opacity(colorScheme == .light ? 0.11 : 0.08), lineWidth: 1)
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
@@ -346,6 +438,7 @@ private struct PopupActionButtonStyle: ButtonStyle {
 }
 
 private struct PopupActionButtonBody: View {
+    @Environment(\.colorScheme) private var colorScheme
     let configuration: PopupActionButtonStyle.Configuration
     @State private var isHovered = false
 
@@ -366,7 +459,7 @@ private struct PopupActionButtonBody: View {
 
     private var backgroundOpacity: Double {
         if configuration.isPressed { return 0.1 }
-        if isHovered { return 0.055 }
+        if isHovered { return colorScheme == .light ? 0.075 : 0.055 }
         return 0
     }
 }

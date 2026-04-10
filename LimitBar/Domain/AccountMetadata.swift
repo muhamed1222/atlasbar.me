@@ -4,18 +4,15 @@ struct AccountMetadata: Codable, Equatable {
     var accountId: UUID
     var priority: AccountPriority
     var note: String
-    var updatedAt: Date
 
     init(
         accountId: UUID,
         priority: AccountPriority = .none,
-        note: String = "",
-        updatedAt: Date = .now
+        note: String = ""
     ) {
         self.accountId = accountId
         self.priority = priority
         self.note = note
-        self.updatedAt = updatedAt
     }
 
     var trimmedNote: String {

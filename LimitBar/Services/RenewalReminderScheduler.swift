@@ -3,12 +3,10 @@ import Foundation
 struct RenewalReminderRequest: Equatable {
     var identifier: String
     var fireDate: Date
-    var title: String
-    var body: String
 }
 
 protocol RenewalNotificationScheduling: Sendable {
-    func scheduleRenewalReminder(identifier: String, accountName: String, at date: Date)
+    func scheduleRenewalReminder(identifier: String, at date: Date)
     func cancelNotifications(withIdentifiers identifiers: [String])
 }
 
@@ -72,7 +70,6 @@ struct RenewalReminderScheduler {
         for request in desiredRequests(account: account, snapshot: snapshot, settings: settings, now: now) {
             notificationManager.scheduleRenewalReminder(
                 identifier: request.identifier,
-                accountName: account.displayName,
                 at: request.fireDate
             )
         }
@@ -110,9 +107,7 @@ struct RenewalReminderScheduler {
 
             return RenewalReminderRequest(
                 identifier: "renewal-\(account.id.uuidString)-\(offset.identifierSuffix)",
-                fireDate: fireDate,
-                title: "Subscription renewal reminder",
-                body: "\(account.displayName) expires \(expiryDate.formatted(.dateTime.month(.abbreviated).day()))"
+                fireDate: fireDate
             )
         }
         .sorted { $0.fireDate < $1.fireDate }
